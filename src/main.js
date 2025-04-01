@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import "./style.css"
+import { rotate } from 'three/src/nodes/TSL.js';
 
 
 // Create the scene
@@ -160,9 +162,19 @@ const trackPieces = {};
 
 const trackColliders = {
   'track-road-wide-straight': [
-    {shape: "box", dimensionsion: [2, 0.1, 4], position: [0, -0.05, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 4], position: [-0.95, 0.1, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 4], position: [0.95, 0.1, 0]},
+    {shape: "box", dimensionsion: [2, 0.1, 4], position: [0, -0.05, 0], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 4], position: [-0.95, 0.1, 0], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 4], position: [0.95, 0.1, 0], rotation: [0, 0, 0]},
+  ],
+  'track-road-wide-curve': [
+    {shape: "box", dimensionsion: [2, 0.1, 2], position: [0, 0, 0], rotation: [0, Math.PI/4, 0]},
+    {shape: "box", dimensionsion: [2, 0.1, 2], position: [-1, 0, 1], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [2, 0.1, 2], position: [1, 0, -1], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 2], position: [-0.65, 0.1, -0.65], rotation: [0, -Math.PI/(4.3), 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 2], position: [0.65, 0.1, 0.65], rotation: [0, -Math.PI/(4.3), 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 0.7], position: [-0.05, 0.1, 1.7], rotation: [0, -Math.PI/30, 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 0.7], position: [0.05, 0.1, -1.7], rotation: [0, -Math.PI/30, 0]},
+    {shape: "box", dimensionsion: [0.1, 0.2, 2.2], position: [1.7, 0.1, -1], rotation: [0, -Math.PI/9, 0]},
   ]
 }
 
@@ -229,6 +241,11 @@ const trackData = {
       position: [0, 0, -4], 
       rotation: [0, 0, 0] 
     },
+    {
+      type: "track-road-wide-curve",
+      position: [1.02, 0, -8],
+      rotation: [0, 0, 0],
+    }
   ]
 };
 
@@ -253,8 +270,11 @@ function addTrackPhysics(trackData) {
       let shape;
       if (collider.shape === "box") {
         shape = new CANNON.Box(new CANNON.Vec3(...collider.dimensionsion.map(d => d / 2)));
+        let rotation = new CANNON.Quaternion();
+        rotation.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), collider.rotation[1]);
+        trackBody.addShape(shape, new CANNON.Vec3(...collider.position), rotation);
       }
-      trackBody.addShape(shape, new CANNON.Vec3(...collider.position));
+      
     }
     );
 
@@ -282,12 +302,25 @@ function animate() {
   cannonDebugger.update();
 
   // Update the camera's position based on yaw, pitch, and distance
-  const carPosition = new THREE.Vector3(0, 0, 0); // Replace with the car's position if needed
+  const carPosition = car.position; // Replace with the car's position if needed
   camera.position.set(
     carPosition.x + Math.sin(cameraYaw) * Math.cos(cameraPitch) * cameraDistance, // X position
     carPosition.y + Math.sin(cameraPitch) * cameraDistance, // Y position (height)
     carPosition.z + Math.cos(cameraYaw) * Math.cos(cameraPitch) * cameraDistance // Z position
   );
+
+  if (keyState.w) {
+    carBody.position.z += deltaTime;
+  }
+  if (keyState.s) {
+    carBody.position.z -= deltaTime;
+  }
+  if (keyState.a) {
+    carBody.position.x -= deltaTime;
+  }
+  if (keyState.d) {
+    carBody.position.x += deltaTime;
+  }
 
   // Make the camera look at the car
   camera.lookAt(carPosition);
