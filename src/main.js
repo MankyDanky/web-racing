@@ -59,6 +59,41 @@ window.addEventListener('keyup', (event) => {
   if (event.key === 'd') keyState.d = false;
 });
 
+// Track mouse state and movement
+let isMouseDown = false; // Track if the mouse is pressed
+let previousMouseX = 0; // Store the previous mouse X position
+let previousMouseY = 0; // Store the previous mouse Y position
+const mouseSensitivity = 0.005; // Adjust sensitivity for orbiting
+
+// Variables for camera orbit
+let cameraAngle = 0; // Initial angle for the camera
+const cameraDistance = 5; // Distance from the car
+const cameraHeight = 2; // Height of the camera above the car
+
+// Listen for mouse down, move, and up events
+window.addEventListener('mousedown', (event) => {
+  isMouseDown = true;
+  previousMouseX = event.clientX;
+  previousMouseY = event.clientY;
+});
+
+window.addEventListener('mouseup', () => {
+  isMouseDown = false;
+});
+
+window.addEventListener('mousemove', (event) => {
+  if (isMouseDown) {
+    const deltaX = event.clientX - previousMouseX; // Horizontal movement
+    const deltaY = event.clientY - previousMouseY; // Vertical movement
+    console.log(deltaX, deltaY);
+    // Update the camera angle and height based on mouse movement
+    cameraAngle -= deltaX * mouseSensitivity; // Horizontal orbit
+
+    previousMouseX = event.clientX;
+    previousMouseY = event.clientY;
+  }
+});
+
 // Load the car model
 const loader = new GLTFLoader();
 loader.load(
@@ -90,10 +125,11 @@ loader.load(
     const acceleration = 2; // Acceleration factor
     const maxSpeed = 1; // Maximum speed
 
+
+
     // Animation loop
     function animate() {
       requestAnimationFrame(animate);
-
 
       // Rotate front wheels for steering
       if (keyState.a) {
@@ -128,7 +164,6 @@ loader.load(
       const moveZ = Math.cos(car.rotation.y + frontWheelAngle) * velocity;
       car.position.x += moveX;
       car.position.z += moveZ;
-      console.log(velocity)
 
       // Rotate the wheels based on velocity and steering
       wheelRotation += velocity ; // Adjust rotation speed as needed
@@ -154,11 +189,16 @@ loader.load(
       wheels.fl.rotation.x -= wheelRotation;
       wheels.fr.rotation.x -= wheelRotation;
 
-      // Anchor the camera to the car
+      // Update the camera's position to orbit around the car
       const carPosition = car.position;
-      camera.position.set(carPosition.x + Math.sin(car.rotation.y) * -5, carPosition.y + 2, carPosition.z + Math.cos(car.rotation.y) * -5); // Adjust camera position
-      camera.lookAt(new THREE.Vector3(carPosition.x, carPosition.y + 1, carPosition.z)); // Make the camera look at the car
+      camera.position.set(
+        carPosition.x + Math.sin(cameraAngle) * cameraDistance, // X position
+        carPosition.y + cameraHeight, // Y position (height)
+        carPosition.z + Math.cos(cameraAngle) * cameraDistance // Z position
+      );
 
+      // Make the camera look at the car
+      camera.lookAt(new THREE.Vector3(carPosition.x, carPosition.y + 1, carPosition.z));
 
       renderer.render(scene, camera);
     }
