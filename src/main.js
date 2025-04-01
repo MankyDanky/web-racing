@@ -3,8 +3,6 @@ import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import "./style.css"
-import { rotate } from 'three/src/nodes/TSL.js';
-
 
 // Create the scene
 const scene = new THREE.Scene();
@@ -18,28 +16,63 @@ const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // Bright whit
 directionalLight.position.set(5, 10, 7.5); // Position the light
 scene.add(directionalLight);
 
+
+const groundMaterial = new CANNON.Material('ground');
+const carMaterial = new CANNON.Material('car');
+
+// Completely replace the wheel contact material
+const wheelContactMaterial = new CANNON.ContactMaterial(groundMaterial, carMaterial, {
+  friction: 0.001,           
+  restitution: 0.0,        
+  contactEquationStiffness: 1e6, 
+  contactEquationRelaxation: 3
+});
+
+
 // Create a camera
 const camera = new THREE.PerspectiveCamera(
-  75, // Field of view
-  window.innerWidth / window.innerHeight, // Aspect ratio
-  0.1, // Near clipping plane
-  1000 // Far clipping plane
+  75, 
+  window.innerWidth / window.innerHeight, 
+  0.1, 
+  1000 
 );
-camera.position.z = 5; // Move the camera back so we can see the scene
 
-// Create the renderer
 const renderer = new THREE.WebGLRenderer();
 const clock = new THREE.Clock();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const physicsWorld = new CANNON.World();
-physicsWorld.gravity.set(0, -9.82, 0); // Set gravity
+physicsWorld.gravity.set(0, -9.82, 0); 
+physicsWorld.addContactMaterial(wheelContactMaterial);
 
+// Also update default materials
+physicsWorld.defaultContactMaterial.friction = 0.3;
+physicsWorld.defaultContactMaterial.restitution = 0.0;
 const cannonDebugger = new CannonDebugger(scene, physicsWorld, {
-  color: 0x00ff00, // Green wireframe
+  color: 0x00ff00, 
   scale: 1,
 });
+
+// Create a large ground plane to replace individual segment ground colliders
+const trackGroundShape = new CANNON.Plane();
+const trackGroundBody = new CANNON.Body({
+  mass: 0, 
+  material: groundMaterial,
+  position: new CANNON.Vec3(0, -0.05, 0) 
+});
+trackGroundBody.addShape(trackGroundShape);
+trackGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+physicsWorld.addBody(trackGroundBody);
+
+// Add this after physics world creation
+const groundShape = new CANNON.Plane();
+const groundBody = new CANNON.Body({
+  mass: 0,
+  material: groundMaterial,
+  position: new CANNON.Vec3(0, 0, 0)
+});
+
 
 // Track key states
 const keyState = {
@@ -118,22 +151,19 @@ window.addEventListener('wheel', (event) => {
 let car;
 let carBody;
 
+// Car physics parameters
+const CAR_MASS = 400;
+const MAX_STEERING = 0.5;
+const STEERING_SPEED = 0.05;
+const WHEEL_RADIUS = 0.3;
+
 // Load the car model
 const loader = new GLTFLoader();
 loader.load(
   '/models/car.glb',
   (gltf) => {
     car = gltf.scene;
-    car.rotateY(Math.PI / 2);
     scene.add(car);
-
-    const carShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.17, 0.45));
-    carBody = new CANNON.Body({
-      mass: 1,
-      position: new CANNON.Vec3(0, 5, 0), // Adjust position as needed
-    });
-    carBody.addShape(carShape, new CANNON.Vec3(0, 0.2, 0)); // Add the shape to the body
-    physicsWorld.addBody(carBody);
 
     // Find the wheels
     const wheels = {};
@@ -145,8 +175,39 @@ loader.load(
         if (child.name === 'wheel-fr') wheels.fr = child;
       }
     });
+    
+    // Store wheel references globally
+    window.carWheels = wheels;
+    
+    // Create a more accurate car body shape - lower and flatter
+    const carShape = new CANNON.Box(new CANNON.Vec3(0.25, 0.18, 0.45));
+    carBody = new CANNON.Body({
+      mass: CAR_MASS,
+      material: carMaterial,
+      position: new CANNON.Vec3(0, 1, 0), 
+      linearDamping: 0.1, 
+      angularDamping: 0.01, 
+    });
+    
+    // Add the shape offset slightly up to position chassis correctly
+    carBody.addShape(carShape, new CANNON.Vec3(0, 0.2, 0));
+    physicsWorld.addBody(carBody);
+    
+    // Add these vehicle state properties to the carBody
+    carBody.steering = 0; 
+    carBody.wheelRotation = 0; 
+    carBody.currentSpeed = 0;
 
-    console.log('Wheels:', wheels); // Debug to ensure wheels are found
+    // At car initialization, after creating carBody:
+    const startRotation = new CANNON.Quaternion().setFromAxisAngle(
+      new CANNON.Vec3(0, 1, 0), 
+      Math.PI
+    );
+    carBody.quaternion.copy(startRotation);
+   
+    car.rotateY(Math.PI);
+
+    console.log('Car loaded with wheels:', wheels);
   },
   undefined,
   (error) => {
@@ -160,21 +221,22 @@ const trackLoader = new GLTFLoader();
 // Object to store loaded track pieces
 const trackPieces = {};
 
+// Modified trackColliders without the ground pieces
 const trackColliders = {
   'track-road-wide-straight': [
-    {shape: "box", dimensionsion: [2, 0.1, 4], position: [0, -0.05, 0], rotation: [0, 0, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 4], position: [-0.95, 0.1, 0], rotation: [0, 0, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 4], position: [0.95, 0.1, 0], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 4], position: [-0.95, 0.1, 0], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 4], position: [0.95, 0.1, 0], rotation: [0, 0, 0]},
   ],
   'track-road-wide-curve': [
-    {shape: "box", dimensionsion: [2, 0.1, 2], position: [0, 0, 0], rotation: [0, Math.PI/4, 0]},
-    {shape: "box", dimensionsion: [2, 0.1, 2], position: [-1, 0, 1], rotation: [0, 0, 0]},
-    {shape: "box", dimensionsion: [2, 0.1, 2], position: [1, 0, -1], rotation: [0, 0, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 2], position: [-0.65, 0.1, -0.65], rotation: [0, -Math.PI/(4.3), 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 2], position: [0.65, 0.1, 0.65], rotation: [0, -Math.PI/(4.3), 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 0.7], position: [-0.05, 0.1, 1.7], rotation: [0, -Math.PI/30, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 0.7], position: [0.05, 0.1, -1.7], rotation: [0, -Math.PI/30, 0]},
-    {shape: "box", dimensionsion: [0.1, 0.2, 2.2], position: [1.7, 0.1, -1], rotation: [0, -Math.PI/9, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 2], position: [-0.65, 0.1, -0.65], rotation: [0, -Math.PI/(4.3), 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 2], position: [0.65, 0.1, 0.65], rotation: [0, -Math.PI/(4.3), 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.7], position: [-0.05, 0.1, 1.7], rotation: [0, -Math.PI/30, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.7], position: [0.02, 0.1, -1.7], rotation: [0, -Math.PI/70, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 2.2], position: [1.6, 0.1, -1], rotation: [0, -Math.PI/9, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 2.2], position: [-1.6, 0.1, 1], rotation: [0, -Math.PI/9, 0]},
+  ],
+  'track-road-wide-corner-small': [
+
   ]
 }
 
@@ -210,9 +272,8 @@ function loadTrackPieces() {
     trackPieceFilenames.map((filename, index) => {
       return new Promise((resolve, reject) => {
         trackLoader.load(
-          `/models/track/${filename}`, // Path to the track piece
+          `/models/track/${filename}`, 
           (gltf) => {
-            // Store by filename without extension for easier reference
             const key = filename.replace('.glb', '');
             trackPieces[key] = gltf.scene;
             resolve();
@@ -228,7 +289,6 @@ function loadTrackPieces() {
   );
 }
 
-// Example JSON data (replace with actual JSON loading logic)
 const trackData = {
   track: [
     { 
@@ -245,6 +305,16 @@ const trackData = {
       type: "track-road-wide-curve",
       position: [1.02, 0, -8],
       rotation: [0, 0, 0],
+    },
+    {
+      type: "track-road-wide-straight",
+      position: [2, 0, -11.9],
+      rotation: [0, 0, 0],
+    }, 
+    {
+      type: "track-road-wide-corner-small",
+      position: [1.05, 0, -15],
+      rotation: [0, Math.PI/2, 0],
     }
   ]
 };
@@ -262,7 +332,8 @@ function buildTrack(trackData) {
 function addTrackPhysics(trackData) {
   trackData.track.forEach((segment) => {
     const trackBody = new CANNON.Body({
-      mass: 0, // Static object (mass = 0)
+      mass: 0,
+      material: groundMaterial,
       position: new CANNON.Vec3(...segment.position),
     });
 
@@ -292,38 +363,155 @@ loadTrackPieces().then(() => {
 // Animation loop
 function animate() {
   requestAnimationFrame(animate);
-  const deltaTime = clock.getDelta(); 
-  physicsWorld.step(1/60, deltaTime, 3); // Step the physics world
+  const deltaTime = Math.min(clock.getDelta(), 0.1); // Cap deltaTime to avoid lge jumps
+  
+  // Only update physics if car is loaded
+  if (carBody && car) {
+    // Reset forces from previous frame
+    carBody.force.setZero();
+    carBody.torque.setZero();
+    
+    // Lock rotation to Y axis only - add this new code
+    carBody.angularVelocity.x = 0;
+    carBody.angularVelocity.z = 0;
+    
+    // Keep car upright by adjusting quaternion
+    const carQuaternion = carBody.quaternion;
+    const upVector = new CANNON.Vec3(0, 1, 0);
+    
+    // Create a quaternion that only preserves Y rotation
+    const yRotation = new CANNON.Quaternion();
+    const euler = new CANNON.Vec3();
+    carQuaternion.toEuler(euler);
+    yRotation.setFromEuler(0, euler.y, 0);
+    
+    // Smoothly adjust toward upright orientation
+    carBody.quaternion = carQuaternion.slerp(yRotation, 0.1);
+    
+    // Get the current vehicle orientation
+    const carRotation = new THREE.Euler().setFromQuaternion(car.quaternion);
+    const forwardDirection = new THREE.Vector3(0, 0, -1).applyEuler(carRotation); // The car's forward
+    const rightDirection = new THREE.Vector3(1, 0, 0).applyEuler(carRotation); // The car's right
+    
+    // Calculate the car's current velocity in forward direction
+    const velocity = carBody.velocity;
+    const forwardVelocity = forwardDirection.clone().multiplyScalar(
+      forwardDirection.dot(new THREE.Vector3(velocity.x, velocity.y, velocity.z))
+    );
+    const currentSpeed = forwardVelocity.length() * (forwardVelocity.dot(forwardDirection) < 0 ? -1 : 1);
+    carBody.currentSpeed = currentSpeed;
+    
+    // Handle steering input
+    const targetSteering = keyState.a ? MAX_STEERING : keyState.d ? -MAX_STEERING : 0;
+    carBody.steering = THREE.MathUtils.lerp(carBody.steering, targetSteering, STEERING_SPEED);
+    
+    // Handle acceleration and braking by directly modifying velocity
+    const maxSpeed = 20;
+    const acceleration = 0.2; 
+    const deceleration = 0.3; 
+    const naturalDeceleration = 0.05; 
 
-  car.position.copy(carBody.position); // Update car position
-  car.quaternion.copy(carBody.quaternion); // Update car rotation
+    // Calculate target speed based on input
+    let targetSpeed = 0;
+    if (keyState.s) targetSpeed = maxSpeed;
+    if (keyState.w) targetSpeed = -maxSpeed * 0.7;
+
+    // Calculate new speed based on target and current speed
+    let newSpeed = currentSpeed;
+    if (Math.abs(targetSpeed) > Math.abs(currentSpeed)) {
+      // Accelerating
+      newSpeed += Math.sign(targetSpeed) * acceleration;
+      if (Math.sign(targetSpeed) > 0 && newSpeed > targetSpeed) newSpeed = targetSpeed;
+      if (Math.sign(targetSpeed) < 0 && newSpeed < targetSpeed) newSpeed = targetSpeed;
+    } else if (targetSpeed === 0) {
+      // Natural deceleration when no input
+      newSpeed -= Math.sign(newSpeed) * naturalDeceleration;
+      if (Math.abs(newSpeed) < naturalDeceleration) newSpeed = 0;
+    } else if (Math.sign(targetSpeed) !== Math.sign(currentSpeed)) {
+      // Braking (going in opposite direction)
+      newSpeed += Math.sign(targetSpeed) * deceleration;
+    }
+
+    // Set the new velocity directly
+    if (newSpeed !== 0) {
+      const newVelocity = forwardDirection.clone().multiplyScalar(newSpeed);
+      
+      // Keep the Y component of velocity (for gravity/jumps)
+      carBody.velocity.x = newVelocity.x;
+      carBody.velocity.z = newVelocity.z;
+      
+      // Only modify Y velocity if on a ramp or in air - keep gravity working
+      if (Math.abs(forwardDirection.y) > 0.1) {
+        carBody.velocity.y = newVelocity.y;
+      }
+    } else if (Math.abs(currentSpeed) < 0.1) {
+      // If almost stopped, just zero out the horizontal velocity
+      carBody.velocity.x = 0;
+      carBody.velocity.z = 0;
+    }
+    
+    // Replace the current steering code with this:
+    if (Math.abs(currentSpeed) > 0.1) { // Only steer when moving
+      // Calculate how much to rotate based on steering, speed, and time
+      let rotationAmount = carBody.steering * Math.min(Math.abs(currentSpeed) * 10, 10) * 0.05;
+      
+      // Flip steering direction when in reverse
+      if (currentSpeed > 0) {
+        rotationAmount = -rotationAmount;
+      }
+      
+      // Directly modify angular velocity instead of applying torque
+      carBody.angularVelocity.set(
+        0,
+        rotationAmount * 10,  // Set Y angular velocity directly based on steering
+        0
+      );
+      
+    }
+    
+    // Update wheel rotation based on speed
+    carBody.wheelRotation -= currentSpeed * deltaTime * 3 / WHEEL_RADIUS;
+    
+    // Update visual wheel rotation
+    if (window.carWheels) {
+      // Rotate wheels around X axis (rolling)
+      const wheels = window.carWheels;
+      Object.keys(wheels).forEach(key => {
+        const wheel = wheels[key];
+        // Reset rotation and then apply new rotation
+        wheel.rotation.set(0, 0, 0);
+        
+        // Apply steering to front wheels
+        if (key === 'bl' || key === 'br') {
+          wheel.rotation.y = carBody.steering;
+        }
+        
+        // Apply rolling rotation to all wheels
+        wheel.rotateX(carBody.wheelRotation);
+      });
+    }
+    
+    // Step the physics world
+    physicsWorld.step(1/120, deltaTime, 4);
+    
+    // Update car position
+    car.position.copy(carBody.position);
+    car.quaternion.copy(carBody.quaternion);
+  }
 
   // Update the debugger to show collision boxes
   cannonDebugger.update();
 
-  // Update the camera's position based on yaw, pitch, and distance
-  const carPosition = car.position; // Replace with the car's position if needed
-  camera.position.set(
-    carPosition.x + Math.sin(cameraYaw) * Math.cos(cameraPitch) * cameraDistance, // X position
-    carPosition.y + Math.sin(cameraPitch) * cameraDistance, // Y position (height)
-    carPosition.z + Math.cos(cameraYaw) * Math.cos(cameraPitch) * cameraDistance // Z position
-  );
-
-  if (keyState.w) {
-    carBody.position.z += deltaTime;
+  // Update camera position
+  if (car) {
+    const carPosition = car.position;
+    camera.position.set(
+      carPosition.x + Math.sin(cameraYaw) * Math.cos(cameraPitch) * cameraDistance,
+      carPosition.y + Math.sin(cameraPitch) * cameraDistance,
+      carPosition.z + Math.cos(cameraYaw) * Math.cos(cameraPitch) * cameraDistance
+    );
+    camera.lookAt(carPosition);
   }
-  if (keyState.s) {
-    carBody.position.z -= deltaTime;
-  }
-  if (keyState.a) {
-    carBody.position.x -= deltaTime;
-  }
-  if (keyState.d) {
-    carBody.position.x += deltaTime;
-  }
-
-  // Make the camera look at the car
-  camera.lookAt(carPosition);
 
   renderer.render(scene, camera);
 }
