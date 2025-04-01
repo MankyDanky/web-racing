@@ -59,7 +59,7 @@ const trackGroundShape = new CANNON.Plane();
 const trackGroundBody = new CANNON.Body({
   mass: 0, 
   material: groundMaterial,
-  position: new CANNON.Vec3(0, -0.05, 0) 
+  position: new CANNON.Vec3(0, 0, 0) 
 });
 trackGroundBody.addShape(trackGroundShape);
 trackGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
@@ -236,7 +236,7 @@ const trackColliders = {
     {shape: "box", dimensionsion: [0.1, 1, 2.2], position: [-1.6, 0.1, 1], rotation: [0, -Math.PI/9, 0]},
   ],
   'track-road-wide-corner-small': [
-
+    {shape: "box", dimensionsion: [0.1, 1, 1.2], position: [-0.25, 0.1, 0.5], rotation: [0, Math.PI/5, 0]}
   ]
 }
 
