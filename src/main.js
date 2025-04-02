@@ -323,6 +323,11 @@ const trackData = {
       type: "track-road-wide-corner-small",
       position: [1.10, 0, -15],
       rotation: [0, Math.PI/2, 0],
+    },
+    {
+      type: "track-road-wide-corner-large",
+      position: [-2.2, 0, -17.6],
+      rotation: [0, 3*Math.PI/2, 0],
     }
   ]
 };
@@ -337,27 +342,132 @@ function buildTrack(trackData) {
   });
 }
 
-function addTrackPhysics(trackData) {
-  trackData.track.forEach((segment) => {
-    const trackBody = new CANNON.Body({
-      mass: 0,
-      material: groundMaterial,
-      position: new CANNON.Vec3(...segment.position),
-    });
+// Add this function to your code
+function loadColliderMeshForTrackPiece(trackType) {
+  return new Promise((resolve, reject) => {
+    const colliderLoader = new GLTFLoader();
+    colliderLoader.load(
+      `/models/track/colliders/${trackType}.glb`, 
+      (gltf) => {
+        const colliderData = [];
+        
+        // Process all meshes in the collider file
+        gltf.scene.traverse((child) => {
+          if (child.isMesh) {
+            // Create a bounding box for the mesh
+            child.geometry.computeBoundingBox();
+            const box = child.geometry.boundingBox;
+            
+            // Calculate dimensions (size) from bounding box
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            
+            // Get world position and rotation
+            const worldPos = new THREE.Vector3();
+            child.getWorldPosition(worldPos);
+            
+            const worldQuat = new THREE.Quaternion();
+            child.getWorldQuaternion(worldQuat);
+            
+            // Store collider info
+            colliderData.push({
+              size: [size.x, size.y, size.z],
+              position: [worldPos.x, worldPos.y, worldPos.z],
+              quaternion: [worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w]
+            });
+          }
+        });
+        
+        resolve(colliderData);
+      },
+      undefined,
+      (error) => {
+        console.error(`Error loading collider for ${trackType}:`, error);
+        reject(error);
+      }
+    );
+  });
+}
 
-    trackColliders[segment.type].forEach((collider) => {
-      let shape;
-      if (collider.shape === "box") {
-        shape = new CANNON.Box(new CANNON.Vec3(...collider.dimensionsion.map(d => d / 2)));
-        let rotation = new CANNON.Quaternion();
-        rotation.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), collider.rotation[1]);
-        trackBody.addShape(shape, new CANNON.Vec3(...collider.position), rotation);
+// Modify your addTrackPhysics function
+function addTrackPhysics(trackData) {
+  // Load all collider meshes first
+  const colliderPromises = trackData.track.map(segment => {
+    return loadColliderMeshForTrackPiece(segment.type)
+      .catch(error => {
+        console.warn(`Using fallback colliders for ${segment.type}`);
+        // Return null if loading fails, we'll use fallback colliders
+        return null;
+      });
+  });
+  
+  // After all colliders are loaded (or failed)
+  Promise.all(colliderPromises).then(colliderResults => {
+    // Now create physics bodies with the collider data
+    trackData.track.forEach((segment, index) => {
+      const trackBody = new CANNON.Body({
+        mass: 0,
+        material: groundMaterial,
+        position: new CANNON.Vec3(...segment.position),
+      });
+      
+      // Apply rotation from track data
+      const rotationQuat = new CANNON.Quaternion();
+      rotationQuat.setFromAxisAngle(
+        new CANNON.Vec3(0, 1, 0), 
+        segment.rotation[1]
+      );
+      trackBody.quaternion = rotationQuat;
+      
+      // If we have loaded colliders, use those
+      const colliderData = colliderResults[index];
+      if (colliderData) {
+        // Create box shapes from the loaded collider data
+        colliderData.forEach(collider => {
+          const shape = new CANNON.Box(
+            new CANNON.Vec3(collider.size[0]/2, collider.size[1]/2, collider.size[2]/2)
+          );
+          
+          // Create quaternion from the collider's rotation
+          const colliderQuat = new CANNON.Quaternion(
+            collider.quaternion[0],
+            collider.quaternion[1],
+            collider.quaternion[2],
+            collider.quaternion[3]
+          );
+          
+          // Add the shape to the body with position and rotation
+          trackBody.addShape(
+            shape, 
+            new CANNON.Vec3(...collider.position),
+            colliderQuat
+          );
+        });
+      } else {
+        // Use fallback colliders if loading failed
+        if (trackColliders[segment.type]) {
+          trackColliders[segment.type].forEach(collider => {
+            const shape = new CANNON.Box(
+              new CANNON.Vec3(...collider.dimensionsion.map(d => d / 2))
+            );
+            
+            let rotation = new CANNON.Quaternion();
+            rotation.setFromAxisAngle(
+              new CANNON.Vec3(0, 1, 0), 
+              collider.rotation[1]
+            );
+            
+            trackBody.addShape(
+              shape, 
+              new CANNON.Vec3(...collider.position), 
+              rotation
+            );
+          });
+        }
       }
       
-    }
-    );
-
-    physicsWorld.addBody(trackBody);
+      physicsWorld.addBody(trackBody);
+    });
   });
 }
 
