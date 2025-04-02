@@ -65,15 +65,6 @@ trackGroundBody.addShape(trackGroundShape);
 trackGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
 physicsWorld.addBody(trackGroundBody);
 
-// Add this after physics world creation
-const groundShape = new CANNON.Plane();
-const groundBody = new CANNON.Body({
-  mass: 0,
-  material: groundMaterial,
-  position: new CANNON.Vec3(0, 0, 0)
-});
-
-
 // Track key states
 const keyState = {
   w: false,
@@ -221,6 +212,7 @@ const trackLoader = new GLTFLoader();
 // Object to store loaded track pieces
 const trackPieces = {};
 
+const trackRoadWideCornerSmallScalar = 0.9;
 // Modified trackColliders without the ground pieces
 const trackColliders = {
   'track-road-wide-straight': [
@@ -236,7 +228,23 @@ const trackColliders = {
     {shape: "box", dimensionsion: [0.1, 1, 2.2], position: [-1.6, 0.1, 1], rotation: [0, -Math.PI/9, 0]},
   ],
   'track-road-wide-corner-small': [
-    {shape: "box", dimensionsion: [0.1, 1, 1.2], position: [-0.25, 0.1, 0.5], rotation: [0, Math.PI/5, 0]}
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-1.2*trackRoadWideCornerSmallScalar,0.1,0.097296*trackRoadWideCornerSmallScalar], rotation: [0, Math.PI/2, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-0.915*trackRoadWideCornerSmallScalar,0.1,0.13487*trackRoadWideCornerSmallScalar], rotation: [0, 5*Math.PI/12, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-0.648648*trackRoadWideCornerSmallScalar,0.1,0.24503*trackRoadWideCornerSmallScalar], rotation: [0, 4*Math.PI/12, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-0.420271*trackRoadWideCornerSmallScalar,0.1,0.420*trackRoadWideCornerSmallScalar], rotation: [0, 3*Math.PI/12, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-0.24503*trackRoadWideCornerSmallScalar,0.1,0.648648*trackRoadWideCornerSmallScalar], rotation: [0, 2*Math.PI/12, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-0.13487*trackRoadWideCornerSmallScalar,0.1,0.914599*trackRoadWideCornerSmallScalar], rotation: [0, 1*Math.PI/12, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.3], position: [-0.0973*trackRoadWideCornerSmallScalar,0.1,1.2*trackRoadWideCornerSmallScalar], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [2.05*trackRoadWideCornerSmallScalar,0.1,1.2*trackRoadWideCornerSmallScalar], rotation: [0, 0, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [2.0*trackRoadWideCornerSmallScalar,0.1,0.635*trackRoadWideCornerSmallScalar], rotation: [0, Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [1.86*trackRoadWideCornerSmallScalar,0.1,0.0875*trackRoadWideCornerSmallScalar], rotation: [0, 2*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [1.62*trackRoadWideCornerSmallScalar,0.1,-0.426*trackRoadWideCornerSmallScalar], rotation: [0, 3*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [1.29*trackRoadWideCornerSmallScalar,0.1,-0.891*trackRoadWideCornerSmallScalar], rotation: [0, 4*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [0.891*trackRoadWideCornerSmallScalar,0.1,-1.29*trackRoadWideCornerSmallScalar], rotation: [0, 5*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [0.426*trackRoadWideCornerSmallScalar,0.1,-1.62*trackRoadWideCornerSmallScalar], rotation: [0, 6*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [-0.0875*trackRoadWideCornerSmallScalar,0.1,-1.86*trackRoadWideCornerSmallScalar], rotation: [0, 7*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [-0.635*trackRoadWideCornerSmallScalar,0.1,-2*trackRoadWideCornerSmallScalar], rotation: [0, 8*Math.PI/18, 0]},
+    {shape: "box", dimensionsion: [0.1, 1, 0.6], position: [-1.2*trackRoadWideCornerSmallScalar,0.1,-2.05*trackRoadWideCornerSmallScalar], rotation: [0, 9*Math.PI/18, 0]},
   ]
 }
 
@@ -313,7 +321,7 @@ const trackData = {
     }, 
     {
       type: "track-road-wide-corner-small",
-      position: [1.05, 0, -15],
+      position: [1.10, 0, -15],
       rotation: [0, Math.PI/2, 0],
     }
   ]
