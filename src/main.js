@@ -294,7 +294,7 @@ function controlCar(ammoInstance) {
   
   // Control parameters
   const maxSpeed = 20;        // Maximum speed
-  const acceleration = 0.1;   // Speed increase per frame
+  const acceleration = 0.0000001;   // Speed increase per frame
   const deceleration = 0.05;  // Natural slowdown
   const steeringSpeed = 1.0;  // Base turning rate
   const speedDependentSteering = true; // Turn slower at high speed
@@ -303,22 +303,15 @@ function controlCar(ammoInstance) {
   const speed = curVelocity.length();
   let targetSpeed = speed;
   
+  let newVelocity = carBody.getLinearVelocity();
+  
   // Handle acceleration/deceleration
   if (keyState.w) {
-    targetSpeed = Math.min(speed + acceleration, maxSpeed);
+    newVelocity.op_add(forwardDir.op_mul(acceleration));
   } else if (keyState.s) {
-    targetSpeed = Math.max(speed - acceleration, -maxSpeed/2); // Slower reverse
-  } else {
-    // Natural deceleration when no keys pressed
-    targetSpeed = speed > deceleration ? speed - deceleration : 0;
+    newVelocity.op_sub(forwardDir.op_mul(acceleration));
   }
-  
-  // Calculate new velocity vector (preserving direction)
-  const newVelocity = new ammoInstance.btVector3(
-    forwardDir.x() * targetSpeed,
-    curVelocity.y(), // Preserve vertical velocity (for jumps/falls)
-    forwardDir.z() * targetSpeed
-  );
+
   
   // Set the new linear velocity
   carBody.setLinearVelocity(newVelocity);
