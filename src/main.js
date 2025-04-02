@@ -22,7 +22,7 @@ const carMaterial = new CANNON.Material('car');
 
 // Completely replace the wheel contact material
 const wheelContactMaterial = new CANNON.ContactMaterial(groundMaterial, carMaterial, {
-  friction: 0.001,           
+  friction: 0.000,           
   restitution: 0.0,        
   contactEquationStiffness: 1e6, 
   contactEquationRelaxation: 3
@@ -53,17 +53,6 @@ const cannonDebugger = new CannonDebugger(scene, physicsWorld, {
   color: 0x00ff00, 
   scale: 1,
 });
-
-// Create a large ground plane to replace individual segment ground colliders
-const trackGroundShape = new CANNON.Plane();
-const trackGroundBody = new CANNON.Body({
-  mass: 0, 
-  material: groundMaterial,
-  position: new CANNON.Vec3(0, 0, 0) 
-});
-trackGroundBody.addShape(trackGroundShape);
-trackGroundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-physicsWorld.addBody(trackGroundBody);
 
 // Track key states
 const keyState = {
