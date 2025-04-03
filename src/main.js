@@ -10,6 +10,17 @@ scene.background = new THREE.Color(0x87CEEB); // Sky blue
 let box;
 let carModel;
 
+// Add at the top with other global variables
+let carWheels = {
+  fl: null, // Front left
+  fr: null, // Front right
+  bl: null, // Back left
+  br: null  // Back right
+};
+let steeringAngle = 0;
+const MAX_STEER_ANGLE = 0.5; // Maximum steering angle in radians (about 30 degrees)
+const STEERING_SPEED = 0.2; // How quickly steering changes
+
 // Camera setup
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 5, 10);
@@ -154,13 +165,21 @@ function createCar(ammoInstance) {
       carModel.scale.set(4, 4, 4); // Adjust scale as needed
       carModel.position.set(0, 0, 0); // Position will be updated by physics
       
-      // Make sure car casts shadows
+      // Make sure car casts shadows and find wheels
       carModel.traverse((node) => {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = false;
+          
+          // Find wheels by name
+          if (node.name === 'wheel-fl' || node.name === 'wheel_fl') carWheels.fl = node;
+          if (node.name === 'wheel-fr' || node.name === 'wheel_fr') carWheels.fr = node;
+          if (node.name === 'wheel-bl' || node.name === 'wheel_bl') carWheels.bl = node;
+          if (node.name === 'wheel-br' || node.name === 'wheel_br') carWheels.br = node;
         }
       });
+      
+      console.log('Found wheels:', carWheels);
       
       // Add to scene
       scene.add(carModel);
@@ -312,6 +331,27 @@ function updatePhysics(deltaTime, ammoInstance) {
   }
 }
 
+// Add this function to update wheel steering
+function updateWheelSteering() {
+  // Calculate target steering angle
+  let targetSteerAngle = 0;
+  
+  if (keyState.a) targetSteerAngle = MAX_STEER_ANGLE;
+  else if (keyState.d) targetSteerAngle = -MAX_STEER_ANGLE;
+  
+  // Smoothly interpolate current steering angle toward target
+  steeringAngle = steeringAngle + (targetSteerAngle - steeringAngle) * STEERING_SPEED;
+  
+  // Apply rotation to the wheels if they exist
+  if (carWheels.bl) carWheels.bl.rotation.y = steeringAngle;
+  if (carWheels.br) carWheels.br.rotation.y = steeringAngle;
+  
+  // Log the steering angle for debugging
+  if (keyState.a || keyState.d) {
+    console.log('Steering angle:', THREE.MathUtils.radToDeg(steeringAngle) + '°');
+  }
+}
+
 // Animation loop
 const clock = new THREE.Clock();
 function animate() {
@@ -321,6 +361,9 @@ function animate() {
   
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
+    
+    // Update wheel steering
+    updateWheelSteering();
     
     // Update debug visuals positions
     for (let i = 0; i < debugObjects.length; i++) {
