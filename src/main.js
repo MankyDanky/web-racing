@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import "./style.css";
 import Ammo from './lib/ammo.js';
 
 // Scene setup
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); // Sky blue
+let box;
 
 // Camera setup
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -104,69 +106,143 @@ function createGround(ammoInstance) {
   physicsWorld.addRigidBody(groundBody);
 }
 
-// Create a simple box
-function createBox(ammoInstance) {
-  // Visual box
-  const boxSize = 1;
-  const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
-  const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xff4444 });
-  const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-  boxMesh.position.set(0, 5, 0); // Start 5 units above ground
-  boxMesh.castShadow = true;
-  boxMesh.receiveShadow = true;
-  scene.add(boxMesh);
+// Create a car instead of a box
+function createCar(ammoInstance) {
+  // Car physics parameters
+  const carWidth = 1.2;
+  const carHeight = 0.6;
+  const carLength = 2.0;
+  const carMass = 1.0;
   
-  // Physics box
-  const boxShape = new ammoInstance.btBoxShape(new ammoInstance.btVector3(boxSize/2, boxSize/2, boxSize/2));
-  boxShape.setMargin(0.05);
-  
-  const boxTransform = new ammoInstance.btTransform();
-  boxTransform.setIdentity();
-  boxTransform.setOrigin(new ammoInstance.btVector3(0, 5, 0)); // Same position as visual
-  
-  const mass = 1;
-  const localInertia = new ammoInstance.btVector3(0, 0, 0);
-  boxShape.calculateLocalInertia(mass, localInertia);
-  
-  const boxMotionState = new ammoInstance.btDefaultMotionState(boxTransform);
-  const boxRbInfo = new ammoInstance.btRigidBodyConstructionInfo(
-    mass, boxMotionState, boxShape, localInertia
+  // Create physics shape for car (box shape approximation)
+  const carShape = new ammoInstance.btBoxShape(
+    new ammoInstance.btVector3(carWidth/2, carHeight/2, carLength/2)
   );
   
-  const boxBody = new ammoInstance.btRigidBody(boxRbInfo);
-  boxBody.setFriction(0.0);
-  boxBody.setRollingFriction(0.0);
-  boxBody.setDamping(0.5, 0.5);
-  physicsWorld.addRigidBody(boxBody);
+  const carTransform = new ammoInstance.btTransform();
+  carTransform.setIdentity();
+  carTransform.setOrigin(new ammoInstance.btVector3(0, 1, 0)); // Start above ground
   
-  // Store reference to update visual position
-  rigidBodies.push({ mesh: boxMesh, body: boxBody });
+  const localInertia = new ammoInstance.btVector3(0, 0, 0);
+  carShape.calculateLocalInertia(carMass, localInertia);
+  
+  const carMotionState = new ammoInstance.btDefaultMotionState(carTransform);
+  const carRbInfo = new ammoInstance.btRigidBodyConstructionInfo(
+    carMass, carMotionState, carShape, localInertia
+  );
+  
+  const carBody = new ammoInstance.btRigidBody(carRbInfo);
+  carBody.setFriction(0.0);
+  carBody.setRollingFriction(0.0);
+  carBody.setDamping(0.5, 0.5); // Linear and angular damping
+  
+  // Add to physics world
+  physicsWorld.addRigidBody(carBody);
+  
+  // Load car model
+  const loader = new GLTFLoader();
+  loader.load(
+    '/models/car.glb',
+    (gltf) => {
+      const carModel = gltf.scene;
+      
+      // Adjust model scale and position if needed
+      carModel.scale.set(5, 5, 5); // Adjust scale as needed
+      carModel.position.set(0, 0, 0); // Position will be updated by physics
+      
+      // Make sure car casts shadows
+      carModel.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = false;
+        }
+      });
+      
+      // Add to scene
+      scene.add(carModel);
+      
+      // Set global reference
+      box = carModel; // We still use 'box' variable as the reference
+      
+      // Store reference to update visual position
+      rigidBodies.push({ mesh: carModel, body: carBody });
+      
+      console.log('Car model loaded successfully');
+    },
+    (xhr) => {
+      console.log('Car loading: ' + (xhr.loaded / xhr.total * 100) + '% loaded');
+    },
+    (error) => {
+      console.error('Error loading car model:', error);
+      // Fallback to simple box if car model fails to load
+      createFallbackCar(ammoInstance);
+    }
+  );
+}
+
+// Fallback function in case the car model fails to load
+function createFallbackCar(ammoInstance) {
+  console.warn('Using fallback car model');
+  
+  const carGeometry = new THREE.BoxGeometry(1.2, 0.6, 2.0);
+  const carMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+  const carMesh = new THREE.Mesh(carGeometry, carMaterial);
+  carMesh.position.set(0, 1, 0);
+  carMesh.castShadow = true;
+  carMesh.receiveShadow = true;
+  scene.add(carMesh);
+  box = carMesh;
+  
+  // Physics already created in createCar
+  rigidBodies[0].mesh = carMesh;
 }
 
 // Set up keyboard input
 function setupKeyControls() {
   document.addEventListener('keydown', (event) => {
     if (event.key.toLowerCase() === 'w') keyState.w = true;
+    if (event.key.toLowerCase() === 's') keyState.s = true;
+    if (event.key.toLowerCase() === 'a') keyState.a = true;
+    if (event.key.toLowerCase() === 'd') keyState.d = true;
   });
   
   document.addEventListener('keyup', (event) => {
     if (event.key.toLowerCase() === 'w') keyState.w = false;
+    if (event.key.toLowerCase() === 's') keyState.s = false;
+    if (event.key.toLowerCase() === 'a') keyState.a = false;
+    if (event.key.toLowerCase() === 'd') keyState.d = false;
   });
+  
   
   console.log('Keyboard controls set up - Press W to apply force');
 }
 
 // Update physics
 function updatePhysics(deltaTime, ammoInstance) {
+  const forwardForce = 100; // Force to apply when 'W' is pressed
+  const backwardForce = -100; // Force to apply when 'S' is pressed
+  const direction = new THREE.Vector3();
+  box.getWorldDirection(direction);
+
   // Apply forces based on key presses
   if (keyState.w && rigidBodies.length > 0) {
     const boxBody = rigidBodies[0].body;
     
-    
+
     // Apply force in positive z direction (forward)
-    const force = new ammoInstance.btVector3(0, 0, 10); // 10 Newton force
+    const force = new ammoInstance.btVector3(direction.x*10, direction.y*10, direction.z*10); // 10 Newton force
     boxBody.applyCentralForce(force);
     
+    
+    // Clean up to prevent memory leaks
+    ammoInstance.destroy(force);
+  }
+
+  if (keyState.s && rigidBodies.length > 0) {
+    const boxBody = rigidBodies[0].body;
+    // Apply force in negative z direction (backward)
+    const force = new ammoInstance.btVector3(direction.x*backwardForce, direction.y*backwardForce, direction.z*backwardForce); // 5 Newton force
+    boxBody.applyCentralForce(force);
     
     // Clean up to prevent memory leaks
     ammoInstance.destroy(force);
@@ -225,8 +301,8 @@ Ammo().then(ammoLib => {
   // Set up world
   initPhysics(ammoLib);
   createGround(ammoLib);
-  createBox(ammoLib);
-  setupKeyControls(); // Add this line
+  createCar(ammoLib); // Replace createBox with createCar
+  setupKeyControls();
   
   // Start animation loop
   animate();
