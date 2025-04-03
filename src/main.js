@@ -134,7 +134,9 @@ function createBox(ammoInstance) {
   );
   
   const boxBody = new ammoInstance.btRigidBody(boxRbInfo);
-  boxBody.setFriction(0.5);
+  boxBody.setFriction(0.0);
+  boxBody.setRollingFriction(0.0);
+  boxBody.setDamping(0.5, 0.5);
   physicsWorld.addRigidBody(boxBody);
   
   // Store reference to update visual position
@@ -160,9 +162,11 @@ function updatePhysics(deltaTime, ammoInstance) {
   if (keyState.w && rigidBodies.length > 0) {
     const boxBody = rigidBodies[0].body;
     
+    
     // Apply force in positive z direction (forward)
     const force = new ammoInstance.btVector3(0, 0, 10); // 10 Newton force
     boxBody.applyCentralForce(force);
+    
     
     // Clean up to prevent memory leaks
     ammoInstance.destroy(force);
