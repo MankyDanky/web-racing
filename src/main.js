@@ -22,6 +22,11 @@ const MAX_STEER_ANGLE = 0.5; // Maximum steering angle in radians (about 30 degr
 const STEERING_SPEED = 0.2; // How quickly steering changes
 const STEERING_FORCE = 50; // Base steering torque force multiplier
 
+// Add these camera parameters at the top with other constants
+const CAMERA_DISTANCE = 12; // Distance behind the car
+const CAMERA_HEIGHT = 5;    // Height above the car
+const CAMERA_LERP = 0.1;    // Smoothing factor (0-1)
+
 // Track model library
 let trackPieces = {};
 
@@ -62,6 +67,11 @@ const trackData = {
       type: "track-road-wide-straight-bend",
       position: [-3.8, 0.85, -20.95],
       rotation: [0, Math.PI, 0],
+    },
+    {
+      type: "track-road-wide-straight-bend",
+      position: [0, 0.8, 10],
+      rotation: [0,0,0]
     }
   ]
 };
@@ -196,7 +206,7 @@ function createCar(ammoInstance) {
   // Car physics parameters
   const carWidth = 2.4;
   const carHeight = 1.2;
-  const carLength = 3.6;
+  const carLength = 3;
   const carMass = 10;
   
   // Create physics shape for car (box shape approximation)
@@ -307,7 +317,7 @@ function createCarDebugVisuals(carBody) {
   // Get the car dimensions
   const carWidth = 2.4;
   const carHeight = 1.2;
-  const carLength = 3.6;
+  const carLength = 3.0;
    
   // Create wireframe box with more visible settings
   const boxGeom = new THREE.BoxGeometry(carWidth, carHeight, carLength);
@@ -353,7 +363,7 @@ function setupKeyControls() {
 
 // Update physics
 function updatePhysics(deltaTime, ammoInstance) {
-  const forwardForce = 100; // Force to apply when 'W' is pressed
+  const forwardForce = 200; // Force to apply when 'W' is pressed
   const backwardForce = -100; // Force to apply when 'S' is pressed
   
 
@@ -671,14 +681,54 @@ function addTrackPhysics(trackData, ammoInstance) {
     
     const trackBody = new ammoInstance.btRigidBody(rbInfo);
     trackBody.setFriction(0.6); // Lower friction
-    trackBody.setRestitution(0.2); // Add some bounce
-    trackBody.setContactProcessingThreshold(0.025); // Improve contact processing
+    trackBody.setRestitution(0.9); // Add some bounce
+    trackBody.setContactProcessingThreshold(0.5); // Improve contact processing
     
     // Add to physics world
     physicsWorld.addRigidBody(trackBody);
     
     console.log(`Added mesh-based physics for track piece ${index}: ${piece.type}`);
   });
+}
+
+// Update the camera system to use orbit controls around car
+function updateCamera() {
+  if (!box || !carModel) return;
+  
+  // Get car's position to use as orbit target
+  const carPos = box.position.clone();
+  
+  // Add slight height offset for better view
+  const targetPos = carPos.clone().add(new THREE.Vector3(0, 2, 0));
+  
+  // Update the orbit controls target to follow the car
+  controls.target.copy(targetPos);
+  
+  // Let the orbit controls handle camera rotation and position
+  controls.update();
+}
+
+// Initialize camera and controls to orbit the car
+function initializeCamera() {
+  // Start with a reasonable position
+  camera.position.set(0, 10, 20);
+  
+  // Configure orbit controls
+  controls.enableDamping = true; // Smooth camera movement
+  controls.dampingFactor = 0.05;
+  controls.rotateSpeed = 0.5;
+  
+  // Set minimum and maximum distance
+  controls.minDistance = 5;
+  controls.maxDistance = 30;
+  
+  // Limit vertical orbit angle if desired
+  controls.minPolarAngle = 0.1; // Prevent going below the car
+  controls.maxPolarAngle = Math.PI / 2; // Prevent going below horizon
+  
+  // Set initial target
+  controls.target.set(0, 2, 0);
+  controls.update();
 }
 
 // Animation loop
@@ -690,9 +740,12 @@ function animate() {
   
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
-    
-    // Update wheel steering
     updateWheelSteering();
+    
+    // Update camera target to follow car
+    updateCamera();
+    
+    // No need for controls.update() here since updateCamera calls it
     
     // Update debug visuals positions
     for (let i = 0; i < debugObjects.length; i++) {
@@ -715,7 +768,6 @@ function animate() {
     }
   }
   
-  controls.update();
   renderer.render(scene, camera);
 }
 
@@ -755,6 +807,9 @@ Ammo().then(ammoLib => {
       
       // Remove loading message
       document.body.removeChild(loadingEl);
+      
+      // Initialize camera
+      initializeCamera();
       
       // Start animation
       animate();
