@@ -20,6 +20,7 @@ let carWheels = {
 let steeringAngle = 0;
 const MAX_STEER_ANGLE = 0.5; // Maximum steering angle in radians (about 30 degrees)
 const STEERING_SPEED = 0.2; // How quickly steering changes
+const STEERING_FORCE = 50; // Base steering torque force multiplier
 
 // Camera setup
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -149,7 +150,7 @@ function createCar(ammoInstance) {
   const carBody = new ammoInstance.btRigidBody(carRbInfo);
   carBody.setFriction(0.0);
   carBody.setRollingFriction(0.0);
-  carBody.setDamping(0.5, 0.5); // Linear and angular damping
+  carBody.setDamping(0.99, 0.99); // Linear and angular damping
   
   // Add to physics world
   physicsWorld.addRigidBody(carBody);
@@ -279,8 +280,8 @@ function setupKeyControls() {
 
 // Update physics
 function updatePhysics(deltaTime, ammoInstance) {
-  const forwardForce = 100; // Force to apply when 'W' is pressed
-  const backwardForce = -100; // Force to apply when 'S' is pressed
+  const forwardForce = 1000; // Force to apply when 'W' is pressed
+  const backwardForce = -1000; // Force to apply when 'S' is pressed
   
 
   // Apply forces based on key presses
@@ -309,6 +310,44 @@ function updatePhysics(deltaTime, ammoInstance) {
     
     // Clean up to prevent memory leaks
     ammoInstance.destroy(force);
+  }
+
+  // Apply steering torque when car is moving
+  if (rigidBodies.length > 0 && carModel) {
+    const carBody = rigidBodies[0].body;
+    
+    // Only apply steering torque if we have some steering angle
+    if (steeringAngle !== 0) {
+        // Get current velocity
+        const velocity = carBody.getLinearVelocity();
+        const speed = Math.sqrt(velocity.x() * velocity.x() + velocity.z() * velocity.z());
+        
+        // Only apply steering when moving at some speed
+        if (speed > 0) {
+          const direction = new THREE.Vector3();
+        box.getWorldDirection(direction);
+        
+        // Create a velocity vector in THREE.js format for dot product
+        const velocityVec = new THREE.Vector3(velocity.x(), velocity.y(), velocity.z());
+        
+        // Calculate dot product to determine if moving forward or backward
+        // Positive = forward, Negative = backward
+        const dotProduct = direction.dot(velocityVec);
+        
+        // Reverse steering direction when moving backward
+        const directionMultiplier = Math.sign(dotProduct);
+        // Calculate torque value (negative steeringAngle = right turn)
+        const torqueAmount = steeringAngle * STEERING_FORCE * speed/2 * directionMultiplier;
+        
+        // Apply torque around Y-axis (up direction)
+        const steeringTorque = new ammoInstance.btVector3(0, torqueAmount, 0);
+        carBody.applyTorque(steeringTorque);
+        
+        // Clean up to prevent memory leaks
+        ammoInstance.destroy(steeringTorque);
+      }
+      ammoInstance.destroy(velocity);
+    }
   }
 
   // Step simulation
