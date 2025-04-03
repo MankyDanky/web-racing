@@ -8,6 +8,7 @@ import Ammo from './lib/ammo.js';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); // Sky blue
 let box;
+let carModel;
 
 // Camera setup
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -38,6 +39,9 @@ scene.add(directionalLight);
 let physicsWorld;
 let rigidBodies = [];
 let tmpTrans;
+
+// Debug visuals
+let debugObjects = [];
 
 // Keyboard state
 const keyState = { w: false };
@@ -109,10 +113,10 @@ function createGround(ammoInstance) {
 // Create a car instead of a box
 function createCar(ammoInstance) {
   // Car physics parameters
-  const carWidth = 1.2;
-  const carHeight = 0.6;
-  const carLength = 2.0;
-  const carMass = 1.0;
+  const carWidth = 2.4;
+  const carHeight = 1.2;
+  const carLength = 3.6;
+  const carMass = 10;
   
   // Create physics shape for car (box shape approximation)
   const carShape = new ammoInstance.btBoxShape(
@@ -144,10 +148,10 @@ function createCar(ammoInstance) {
   loader.load(
     '/models/car.glb',
     (gltf) => {
-      const carModel = gltf.scene;
+      carModel = gltf.scene;
       
       // Adjust model scale and position if needed
-      carModel.scale.set(5, 5, 5); // Adjust scale as needed
+      carModel.scale.set(4, 4, 4); // Adjust scale as needed
       carModel.position.set(0, 0, 0); // Position will be updated by physics
       
       // Make sure car casts shadows
@@ -162,10 +166,13 @@ function createCar(ammoInstance) {
       scene.add(carModel);
       
       // Set global reference
-      box = carModel; // We still use 'box' variable as the reference
+      box = carModel;
       
       // Store reference to update visual position
       rigidBodies.push({ mesh: carModel, body: carBody });
+      
+      // Create debug visuals for the car immediately after adding it
+      createCarDebugVisuals(carBody);
       
       console.log('Car model loaded successfully');
     },
@@ -175,26 +182,60 @@ function createCar(ammoInstance) {
     (error) => {
       console.error('Error loading car model:', error);
       // Fallback to simple box if car model fails to load
-      createFallbackCar(ammoInstance);
     }
   );
 }
 
-// Fallback function in case the car model fails to load
-function createFallbackCar(ammoInstance) {
-  console.warn('Using fallback car model');
+// Create debug visuals
+function createDebugVisuals(ammoInstance) {
+  console.log('Creating debug visuals for collision shapes');
   
-  const carGeometry = new THREE.BoxGeometry(1.2, 0.6, 2.0);
-  const carMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-  const carMesh = new THREE.Mesh(carGeometry, carMaterial);
-  carMesh.position.set(0, 1, 0);
-  carMesh.castShadow = true;
-  carMesh.receiveShadow = true;
-  scene.add(carMesh);
-  box = carMesh;
+  // For the ground plane
+  const planeGeom = new THREE.PlaneGeometry(20, 20);
+  const planeMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0x00ff00, 
+    wireframe: true,
+    opacity: 0.5,
+    transparent: true,
+    side: THREE.DoubleSide
+  });
+  const planeDebug = new THREE.Mesh(planeGeom, planeMaterial);
+  planeDebug.rotation.x = -Math.PI / 2; // Match ground orientation
+  planeDebug.position.y = 0.01; // Slight offset to avoid z-fighting
+  scene.add(planeDebug);
+  debugObjects.push({ mesh: planeDebug, isStatic: true });
   
-  // Physics already created in createCar
-  rigidBodies[0].mesh = carMesh;
+  // Don't try to create car debug visual here
+  // It will be created after car model loads
+}
+
+// Create car debug visuals
+function createCarDebugVisuals(carBody) {
+  // Get the car dimensions
+  const carWidth = 2.4;
+  const carHeight = 1.2;
+  const carLength = 3.6;
+   
+  // Create wireframe box with more visible settings
+  const boxGeom = new THREE.BoxGeometry(carWidth, carHeight, carLength);
+  const boxMaterial = new THREE.MeshBasicMaterial({
+    color: 0x00ff00,
+    wireframe: true,
+    opacity: 1,
+    side: THREE.DoubleSide
+  });
+  const carDebug = new THREE.Mesh(boxGeom, boxMaterial);
+  
+  carDebug.position.set(0, 1, 0); // Match car position
+  
+  scene.add(carDebug);
+  
+  // Log detailed information for debugging
+  console.log('Car debug visual created at position:', 
+              carDebug.position.x, carDebug.position.y, carDebug.position.z);
+  
+  // Link to the physics body
+  debugObjects.push({ mesh: carDebug, body: carBody, isStatic: false });
 }
 
 // Set up keyboard input
@@ -221,16 +262,17 @@ function setupKeyControls() {
 function updatePhysics(deltaTime, ammoInstance) {
   const forwardForce = 100; // Force to apply when 'W' is pressed
   const backwardForce = -100; // Force to apply when 'S' is pressed
-  const direction = new THREE.Vector3();
-  box.getWorldDirection(direction);
+  
 
   // Apply forces based on key presses
   if (keyState.w && rigidBodies.length > 0) {
+    const direction = new THREE.Vector3();
+    box.getWorldDirection(direction);
     const boxBody = rigidBodies[0].body;
     
 
     // Apply force in positive z direction (forward)
-    const force = new ammoInstance.btVector3(direction.x*10, direction.y*10, direction.z*10); // 10 Newton force
+    const force = new ammoInstance.btVector3(direction.x*forwardForce, direction.y*forwardForce, direction.z*forwardForce); // 10 Newton force
     boxBody.applyCentralForce(force);
     
     
@@ -239,6 +281,8 @@ function updatePhysics(deltaTime, ammoInstance) {
   }
 
   if (keyState.s && rigidBodies.length > 0) {
+    const direction = new THREE.Vector3();
+    box.getWorldDirection(direction);
     const boxBody = rigidBodies[0].body;
     // Apply force in negative z direction (backward)
     const force = new ammoInstance.btVector3(direction.x*backwardForce, direction.y*backwardForce, direction.z*backwardForce); // 5 Newton force
@@ -277,6 +321,26 @@ function animate() {
   
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
+    
+    // Update debug visuals positions
+    for (let i = 0; i < debugObjects.length; i++) {
+      const debugObj = debugObjects[i];
+      // Skip static objects like the ground
+      if (debugObj.isStatic) continue;
+      
+      // Update from physics body
+      if (debugObj.body) {
+        const ms = debugObj.body.getMotionState();
+        if (ms) {
+          ms.getWorldTransform(tmpTrans);
+          const p = tmpTrans.getOrigin();
+          const q = tmpTrans.getRotation();
+          
+          debugObj.mesh.position.set(p.x(), p.y(), p.z());
+          debugObj.mesh.quaternion.set(q.x(), q.y(), q.z(), q.w());
+        }
+      }
+    }
   }
   
   controls.update();
@@ -303,6 +367,9 @@ Ammo().then(ammoLib => {
   createGround(ammoLib);
   createCar(ammoLib); // Replace createBox with createCar
   setupKeyControls();
+  
+  // Create debug visuals after physics objects are set up
+  setTimeout(() => createDebugVisuals(ammoLib), 500); // Short delay to ensure car is loaded
   
   // Start animation loop
   animate();
