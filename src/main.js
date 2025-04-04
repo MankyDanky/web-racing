@@ -10,6 +10,7 @@ let physicsWorld, tmpTrans;
 const rigidBodies = [];
 let debugObjects = [];
 const clock = new THREE.Clock();
+let trackPieces = {}; // Dictionary to store loaded track models
 
 // Car components
 let carBody;
@@ -23,21 +24,169 @@ const VEHICLE_HEIGHT = 0.6;
 const VEHICLE_LENGTH = 4.0;
 const WHEEL_RADIUS = 0.4;
 const WHEEL_WIDTH = 0.25;
-const SUSPENSION_REST_LENGTH = 0.3;
+const SUSPENSION_REST_LENGTH = 0.5;
 const WHEEL_X_OFFSET = 0.8;
 const WHEEL_Z_OFFSET = 1.5;
 
 // Physics tuning parameters
 const SUSPENSION_STIFFNESS = 60;
-const SUSPENSION_DAMPING = 4.5;
-const SUSPENSION_COMPRESSION = 4.4;
-const ROLL_INFLUENCE = 0.1;
+const SUSPENSION_DAMPING = 12;
+const SUSPENSION_COMPRESSION = 12;
+const ROLL_INFLUENCE = 0.05;
 const WHEEL_FRICTION = 1500;
 
 // Control state
 const keyState = {
   w: false, s: false, a: false, d: false
 };
+
+// Camera parameters
+const CAMERA_DISTANCE = 10;   // Distance behind the car
+const CAMERA_HEIGHT = 5;      // Height above the car
+const CAMERA_LERP = 0.1;      // Smoothing factor (0-1)
+const CAMERA_LOOK_AHEAD = 2;  // How far ahead of the car to look
+
+// Steering parameters
+const MAX_STEERING_ANGLE = 0.25; // Maximum steering angle in radians
+const STEERING_SPEED = 2;    // Speed of steering adjustment
+const STEERING_RETURN_SPEED = 2; // Speed of returning to center
+let currentSteeringAngle = 0;   // Current steering angle
+
+// Track piece metadata - stores connection information for each piece
+const trackPieceData = {
+  'track-road-wide-straight': {
+    length: 4,
+    endOffset: [0, 0, 4],
+    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
+    startOrientation: [0, 0, 0],
+    endOrientation: [0, 0, 0]  // No rotation change
+  },
+  'track-road-wide-corner-large': {
+    length: 6,
+    endOffset: [-3.8, 0, 4.1],  // This turns 90 degrees, ending offset is to the right
+    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
+    startOrientation: [0, 0, 0],
+    endOrientation: [0, -Math.PI/2, 0]  // Turns 90 degrees right
+  },
+  'track-road-wide-corner-small': {
+    length: 3,
+    endOffset: [-1.8, 0, 2.1],  // Tighter turn
+    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
+    startOrientation: [0, 0, 0],
+    endOrientation: [0, -Math.PI/2, 0]  // Turns 90 degrees right
+  },
+  'track-road-wide-curve': {
+    length: 4,
+    endOffset: [-2, 0, 4],  // Slight curve to the right
+    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
+    startOrientation: [0, 0, 0],
+    endOrientation: [0, 0, 0]  // Slight turn (adjust angle as needed)
+  },
+  'track-road-wide-corner-large-ramp': {
+    length: 6,
+    endOffset: [4, 1, 4],  // Ramp goes up 1 unit
+    canConnect: ['track-road-wide-straight', 'track-road-wide-straight-bend'],
+    startOrientation: [0, 0, 0],
+    endOrientation: [0, Math.PI/2, 0]  // Turns 90 degrees right with elevation
+  },
+  'track-road-wide-straight-bend': {
+    length: 4,
+    endOffset: [0, 0.5, 4],  // Bends upward
+    canConnect: ['track-road-wide-straight', 'track-road-wide-straight-bend'],
+    startOrientation: [0, 0, 0],
+    endOrientation: [0, 0, 0]  // Slight upward angle
+  }
+};
+
+// Function to generate random track
+function generateRandomTrack(numPieces, startX = 0, startY = 0, startZ = -1) {
+  // Start with a straight piece
+  let currentPieceType = 'track-road-wide-straight';
+  let currentPosition = [startX, startY, startZ];
+  let currentRotation = [0, 0, 0];
+  let currentDirection = new THREE.Vector3(0, 0, 1); // Start moving in Z+ direction
+  
+  // Add track-end at the start (barrier)
+  const trackData = {
+    track: [
+      {
+        type: 'track-end',
+        position: [currentPosition[0], currentPosition[1], currentPosition[2] +0.3],
+        rotation: [0, Math.PI, 0] // Facing toward the track
+      }
+    ]
+  };
+  
+  // Generate the track pieces
+  for (let i = 0; i < numPieces; i++) {
+    // Add the current piece
+    trackData.track.push({
+      type: currentPieceType,
+      position: [...currentPosition],
+      rotation: [...currentRotation]
+    });
+    
+    // Get current piece data
+    const pieceData = trackPieceData[currentPieceType];
+    
+    // Calculate the end position in local space
+    const endOffsetLocal = new THREE.Vector3(...pieceData.endOffset);
+    
+    // Apply current rotation to the end offset to get world space offset
+    const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(
+      new THREE.Euler(currentRotation[0], currentRotation[1], currentRotation[2])
+    );
+    
+    endOffsetLocal.applyMatrix4(rotationMatrix);
+    
+    // Calculate the next position
+    const nextPosition = [
+      currentPosition[0] + endOffsetLocal.x,
+      currentPosition[1] + endOffsetLocal.y,
+      currentPosition[2] + endOffsetLocal.z
+    ];
+    
+    // Update direction based on end orientation of current piece
+    const endRotation = [
+      currentRotation[0] + pieceData.endOrientation[0],
+      currentRotation[1] + pieceData.endOrientation[1],
+      currentRotation[2] + pieceData.endOrientation[2]
+    ];
+    
+    // Choose next piece (randomly select from valid connections)
+    const validConnections = pieceData.canConnect;
+    const nextPieceType = validConnections[Math.floor(Math.random() * validConnections.length)];
+    
+    // Update current state
+    currentPosition = nextPosition;
+    currentRotation = endRotation;
+    currentPieceType = nextPieceType;
+  }
+  
+  // Add track-end at the end (barrier)
+  // Calculate position slightly beyond last piece
+  const lastPiece = trackData.track[trackData.track.length - 1];
+  const lastPieceData = trackPieceData[lastPiece.type];
+  
+  const lastDirection = new THREE.Vector3(0, 0, 1);
+  const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(
+    new THREE.Euler(lastPiece.rotation[0], lastPiece.rotation[1], lastPiece.rotation[2])
+  );
+  lastDirection.applyMatrix4(rotationMatrix);
+  lastDirection.normalize().multiplyScalar(0.4);
+  
+  trackData.track.push({
+    type: 'track-end',
+    position: [
+      currentPosition[0],
+      currentPosition[1],
+      currentPosition[2]
+    ],
+    rotation: [...currentRotation] // Same rotation as last track piece
+  });
+  console.log(trackData);
+  return trackData;
+}
 
 // Initialize everything
 function init() {
@@ -89,11 +238,6 @@ function init() {
   renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
   
-  // Setup controls
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 5, 0);
-  controls.update();
-  
   // Handle window resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -109,11 +253,25 @@ function init() {
     
     initPhysics(ammo);
     createGround(ammo);
-    createVehicle(ammo);
-    setupKeyControls();
     
-    // Start animation loop
-    animate();
+    // Preload track pieces first
+    preloadTrackPieces(() => {
+      // Generate random track with 10 pieces
+      const trackData = generateRandomTrack(10);
+      
+      // Build the visual track
+      const track = buildTrack(trackData);
+      
+      // Add physics to the track
+      addTrackPhysics(trackData, ammo);
+      
+      // Now create the vehicle (after track is ready)
+      createVehicle(ammo);
+      setupKeyControls();
+      
+      // Start animation loop
+      animate();
+    });
   });
 }
 
@@ -133,32 +291,25 @@ function initPhysics(ammo) {
   tmpTrans = new ammo.btTransform();
 }
 
-// Create ground plane
+// Modified ground function without physics
 function createGround(ammo) {
-  // Visual ground
-  const groundGeometry = new THREE.PlaneGeometry(100, 100);
+  // Visual ground only - large grass plane
+  const groundGeometry = new THREE.PlaneGeometry(1000, 1000); // Much larger plane
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x808080,
-    roughness: 0.7
+    color: 0x50C878, // Green color for grass
+    roughness: 0.8,
+    metalness: 0.1
   });
   const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
   groundMesh.rotation.x = -Math.PI / 2;
   groundMesh.receiveShadow = true;
   scene.add(groundMesh);
   
-  // Physics ground
-  const groundShape = new ammo.btStaticPlaneShape(new ammo.btVector3(0, 1, 0), 0);
-  const groundTransform = new ammo.btTransform();
-  groundTransform.setIdentity();
+  // Position it slightly below zero to avoid Z-fighting with track
+  groundMesh.position.y = -0.01;
   
-  const groundMotionState = new ammo.btDefaultMotionState(groundTransform);
-  const groundRbInfo = new ammo.btRigidBodyConstructionInfo(
-    0, groundMotionState, groundShape, new ammo.btVector3(0, 0, 0)
-  );
-  
-  const groundBody = new ammo.btRigidBody(groundRbInfo);
-  groundBody.setFriction(0.8);
-  physicsWorld.addRigidBody(groundBody);
+  // NO PHYSICS COLLIDER ADDED
+  console.log("Created visual grass plane without collider");
 }
 
 // Create vehicle with wheel physics
@@ -170,7 +321,7 @@ function createVehicle(ammo) {
   
   const chassisTransform = new ammo.btTransform();
   chassisTransform.setIdentity();
-  chassisTransform.setOrigin(new ammo.btVector3(0, 1, 0));
+  chassisTransform.setOrigin(new ammo.btVector3(0, 3, 0));
   
   const chassisMotionState = new ammo.btDefaultMotionState(chassisTransform);
   const chassisMass = 800;
@@ -365,18 +516,8 @@ function setupKeyControls() {
 function updatePhysics(deltaTime, ammo) {
   if (!vehicle || !carModel) return;
   
-  // Apply steering based on keyboard input
-  const steeringIncrement = 0.04;
-  const steeringClamp = 10;
-  let steeringValue = 0;
-  
-  if (keyState.a) steeringValue += steeringIncrement;
-  if (keyState.d) steeringValue -= steeringIncrement;
-  
-  // Apply steering to front wheels
-  for (let i = 0; i < 2; i++) {
-    vehicle.setSteeringValue(steeringValue * steeringClamp, i);
-  }
+  // Update steering with time-based gradual changes
+  updateSteering(deltaTime);
   
   // Get current velocity to determine if we're moving forward or backward
   const velocity = carBody.getLinearVelocity();
@@ -394,8 +535,8 @@ function updatePhysics(deltaTime, ammo) {
   
   // Calculate dot product using Three.js
   const dotForward = carForward.dot(velocityThree);
-  const maxEngineForce = 2000;
-  const maxBrakingForce = 300;
+  const maxEngineForce = 4000;
+  const maxBrakingForce = 50;
   let engineForce = 0;
   let brakingForce = 0;
   
@@ -489,17 +630,369 @@ function updatePhysics(deltaTime, ammo) {
   });
 }
 
-// Animation loop
+// Add this new camera update function
+function updateCamera() {
+  if (!carModel) return;
+  
+  // Get car's position
+  const carPos = carModel.position.clone();
+  
+  // Get car's forward direction
+  const carDirection = new THREE.Vector3();
+  carModel.getWorldDirection(carDirection);
+  
+  // Calculate camera position - behind and above the car
+  const cameraOffset = carDirection.clone().multiplyScalar(-CAMERA_DISTANCE);
+  const targetPosition = carPos.clone()
+    .add(cameraOffset)
+    .add(new THREE.Vector3(0, CAMERA_HEIGHT, 0));
+  
+  // Smoothly interpolate camera position
+  camera.position.lerp(targetPosition, CAMERA_LERP);
+  
+  // Look at a point slightly ahead of the car
+  const lookAtPos = carPos.clone().add(
+    carDirection.clone().multiplyScalar(CAMERA_LOOK_AHEAD)
+  );
+  camera.lookAt(lookAtPos);
+}
+
+// Function to preload all track pieces
+function preloadTrackPieces(callback) {
+  const trackPieceFilenames = [
+    'track-road-wide-cap-back.glb',
+    'track-road-wide-cap-front.glb',
+    'track-road-wide-corner-large-ramp.glb',
+    'track-road-wide-corner-large.glb',
+    'track-road-wide-corner-small-ramp.glb',
+    'track-road-wide-corner-small.glb',
+    'track-road-wide-curve.glb',
+    'track-road-wide-straight-bend-large.glb',
+    'track-road-wide-straight-bend.glb',
+    'track-road-wide-straight-bump-down.glb',
+    'track-road-wide-straight-bump-up.glb',
+    'track-road-wide-straight-hill-beginning.glb',
+    'track-road-wide-straight-hill-complete-half.glb',
+    'track-road-wide-straight-hill-complete.glb',
+    'track-road-wide-straight-hill-end.glb',
+    'track-road-wide-straight-skew-left-side.glb',
+    'track-road-wide-straight-skew-left.glb',
+    'track-road-wide-straight-skew-right-side.glb',
+    'track-road-wide-straight-skew-right.glb',
+    'track-road-wide-straight.glb',
+    'track-road-wide.glb',
+    'track-end.glb',
+  ];
+  
+  const loader = new GLTFLoader();
+  let piecesLoaded = 0;
+  const totalPieces = trackPieceFilenames.length;
+  
+  trackPieceFilenames.forEach(filename => {
+    // Get piece type name by removing file extension
+    const pieceType = filename.replace('.glb', '');
+    
+    loader.load(
+      `/models/track/${filename}`,
+      (gltf) => {
+        // Store the model in our dictionary
+        trackPieces[pieceType] = gltf.scene.clone();
+        
+        // Make sure track piece casts and receives shadows
+        trackPieces[pieceType].traverse((node) => {
+          if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = false;
+          }
+        });
+        
+        piecesLoaded++;
+        console.log(`Loaded track piece ${piecesLoaded}/${totalPieces}: ${pieceType}`);
+        
+        // When all pieces are loaded, execute the callback
+        if (piecesLoaded === totalPieces) {
+          console.log('All track pieces loaded successfully');
+          if (callback) callback();
+        }
+      },
+      undefined,
+      (error) => {
+        console.error(`Error loading track piece ${filename}:`, error);
+        piecesLoaded++;
+        
+        // Still continue if some pieces fail to load
+        if (piecesLoaded === totalPieces) {
+          console.log('All track pieces loaded (some with errors)');
+          if (callback) callback();
+        }
+      }
+    );
+  });
+}
+
+// Function to build a track from JSON data
+function buildTrack(trackData) {
+  const track = new THREE.Group();
+  
+  trackData.track.forEach((piece, index) => {
+    const pieceModel = trackPieces[piece.type];
+    
+    if (!pieceModel) {
+      console.error(`Track piece type not found: ${piece.type}`);
+      return;
+    }
+    
+    // Clone the model so we can use it multiple times
+    const trackPiece = pieceModel.clone();
+    
+    // Scale the track piece to match car's scale
+    trackPiece.scale.set(8, 8, 8);
+    
+    // Position the track piece - multiply by 4 to account for scale
+    trackPiece.position.set(
+      piece.position[0] * 8,
+      piece.position[1] * 8,
+      piece.position[2] * 8
+    );
+    
+    // Rotate the track piece
+    trackPiece.rotation.set(
+      piece.rotation[0],
+      piece.rotation[1],
+      piece.rotation[2]
+    );
+    
+    // Add to track group
+    track.add(trackPiece);
+    
+    console.log(`Added track piece ${index}: ${piece.type}`);
+  });
+  
+  // Add the entire track to the scene
+  scene.add(track);
+  console.log('Track built successfully with', trackData.track.length, 'pieces');
+  
+  return track;
+}
+
+// Function to add physics to track pieces
+function addTrackPhysics(trackData, ammoInstance) {
+  // For each track piece, create a corresponding physics object
+  trackData.track.forEach((piece, index) => {
+    const pieceModel = trackPieces[piece.type];
+    
+    if (!pieceModel) {
+      console.error(`Track piece type not found for physics: ${piece.type}`);
+      return;
+    }
+    
+    // Special handling for track-end barriers
+    if (piece.type === 'track-end') {
+      // Create box collider for track-end pieces
+      const BARRIER_WIDTH = 30; // Very wide to block the entire track
+      const BARRIER_HEIGHT = 15; // Tall enough to prevent jumping over
+      const BARRIER_THICKNESS = 2;
+      
+      const barrierShape = new ammoInstance.btBoxShape(
+        new ammoInstance.btVector3(BARRIER_WIDTH/2, BARRIER_HEIGHT/2, BARRIER_THICKNESS/2)
+      );
+      
+      // Create transform and apply position/rotation
+      const barrierTransform = new ammoInstance.btTransform();
+      barrierTransform.setIdentity();
+      
+      // Position the barrier
+      barrierTransform.setOrigin(
+        new ammoInstance.btVector3(
+          piece.position[0] * 8,
+          (piece.position[1] * 8) + (BARRIER_HEIGHT/2), // Center vertically
+          piece.position[2] * 8
+        )
+      );
+      
+      // Apply rotation
+      const quat = new ammoInstance.btQuaternion();
+      quat.setEulerZYX(piece.rotation[2], piece.rotation[1], piece.rotation[0]);
+      barrierTransform.setRotation(quat);
+      
+      // Create motion state
+      const motionState = new ammoInstance.btDefaultMotionState(barrierTransform);
+      
+      // Set up barrier rigid body (static - mass = 0)
+      const mass = 0;
+      const localInertia = new ammoInstance.btVector3(0, 0, 0);
+      
+      // Create rigid body
+      const rbInfo = new ammoInstance.btRigidBodyConstructionInfo(
+        mass, motionState, barrierShape, localInertia
+      );
+      
+      const barrierBody = new ammoInstance.btRigidBody(rbInfo);
+      barrierBody.setFriction(0.8);
+      barrierBody.setRestitution(0.2); // Slightly bouncy
+      
+      // Add to physics world
+      physicsWorld.addRigidBody(barrierBody);
+      
+      console.log(`Added box collider barrier for track-end piece ${index}`);
+    } else {
+      // Regular track piece handling with triangle mesh collider
+      const physicsModel = pieceModel.clone();
+      
+      // Apply the same transformations as the visual model
+      physicsModel.scale.set(8, 8, 8);
+      physicsModel.position.set(
+        piece.position[0] * 8,
+        piece.position[1] * 8,
+        piece.position[2] * 8
+      );
+      physicsModel.rotation.set(
+        piece.rotation[0],
+        piece.rotation[1],
+        piece.rotation[2]
+      );
+      
+      // Update the world matrix to apply all transformations
+      physicsModel.updateMatrixWorld(true);
+      
+      // Extract all mesh geometries from the track piece
+      let vertices = [];
+      let indices = [];
+      let indexOffset = 0;
+      
+      physicsModel.traverse(child => {
+        if (child.isMesh && child.geometry) {
+          // Get vertices
+          const positionAttr = child.geometry.getAttribute('position');
+          const vertexCount = positionAttr.count;
+          
+          // Apply mesh's transform to vertices
+          const worldMatrix = child.matrixWorld;
+          
+          // Extract vertices with transformation
+          for (let i = 0; i < vertexCount; i++) {
+            const vertex = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
+            vertex.applyMatrix4(worldMatrix);
+            
+            vertices.push(vertex.x, vertex.y, vertex.z);
+          }
+          
+          // Get indices - if they exist
+          if (child.geometry.index) {
+            const indices32 = child.geometry.index.array;
+            for (let i = 0; i < indices32.length; i++) {
+              indices.push(indices32[i] + indexOffset);
+            }
+          } else {
+            // No indices - assume vertices are already arranged as triangles
+            for (let i = 0; i < vertexCount; i++) {
+              indices.push(i + indexOffset);
+            }
+          }
+          
+          indexOffset += vertexCount;
+        }
+      });
+      
+      // Create Ammo triangle mesh
+      const triangleMesh = new ammoInstance.btTriangleMesh();
+      
+      // Add all triangles to the mesh
+      for (let i = 0; i < indices.length; i += 3) {
+        const i1 = indices[i] * 3;
+        const i2 = indices[i+1] * 3;
+        const i3 = indices[i+2] * 3;
+        
+        const v1 = new ammoInstance.btVector3(vertices[i1], vertices[i1+1], vertices[i1+2]);
+        const v2 = new ammoInstance.btVector3(vertices[i2], vertices[i2+1], vertices[i2+2]);
+        const v3 = new ammoInstance.btVector3(vertices[i3], vertices[i3+1], vertices[i3+2]);
+        
+        triangleMesh.addTriangle(v1, v2, v3, false);
+        
+        // Clean up Ammo vectors
+        ammoInstance.destroy(v1);
+        ammoInstance.destroy(v2);
+        ammoInstance.destroy(v3);
+      }
+      
+      // Create track collision shape using triangle mesh
+      const trackShape = new ammoInstance.btBvhTriangleMeshShape(triangleMesh, true, true);
+      
+      // Because we've already applied all transformations to the vertices,
+      // the rigid body should be created at origin with identity rotation
+      const trackTransform = new ammoInstance.btTransform();
+      trackTransform.setIdentity();
+      
+      // Create motion state
+      const motionState = new ammoInstance.btDefaultMotionState(trackTransform);
+      
+      // Set up track rigid body (static - mass = 0)
+      const mass = 0;
+      const localInertia = new ammoInstance.btVector3(0, 0, 0);
+      
+      // Create rigid body
+      const rbInfo = new ammoInstance.btRigidBodyConstructionInfo(
+        mass, motionState, trackShape, localInertia
+      );
+      
+      const trackBody = new ammoInstance.btRigidBody(rbInfo);
+      trackBody.setFriction(0.8); // Track should have good grip
+      
+      // Add to physics world
+      physicsWorld.addRigidBody(trackBody);
+      
+      console.log(`Added physics for track piece ${index}: ${piece.type}`);
+    }
+  });
+}
+
+// Modify animate function to use our camera system instead of OrbitControls
 function animate() {
   requestAnimationFrame(animate);
   const deltaTime = Math.min(clock.getDelta(), 0.1);
   
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
+    updateCamera(); // Add this line to update the camera each frame
   }
   
-  controls.update();
+  // Remove the controls.update() line since we're using our own camera system
+  // controls.update();  <-- Remove or comment this line
+  
   renderer.render(scene, camera);
+}
+
+// New function for steering logic
+function updateSteering(deltaTime) {
+  // Calculate target steering angle based on key state
+  let targetSteeringAngle = 0;
+  
+  if (keyState.a) {
+    targetSteeringAngle = MAX_STEERING_ANGLE; // Left
+  } else if (keyState.d) {
+    targetSteeringAngle = -MAX_STEERING_ANGLE; // Right
+  }
+  
+  // Determine appropriate steering speed
+  const steeringSpeed = (targetSteeringAngle === 0 || (currentSteeringAngle > 0 && targetSteeringAngle < 0) || (currentSteeringAngle < 0 && targetSteeringAngle > 0)) ? 
+    STEERING_RETURN_SPEED : // Return to center faster
+    STEERING_SPEED;         // Turn at normal speed
+  
+  // Smoothly interpolate current steering angle towards target
+  const steeringDelta = targetSteeringAngle - currentSteeringAngle;
+  const maxSteeringDelta = steeringSpeed * deltaTime;
+  
+  // Limit the steering change per frame
+  if (Math.abs(steeringDelta) > maxSteeringDelta) {
+    currentSteeringAngle += Math.sign(steeringDelta) * maxSteeringDelta;
+  } else {
+    currentSteeringAngle = targetSteeringAngle;
+  }
+  
+  // Apply steering to front wheels
+  for (let i = 0; i < 2; i++) {
+    vehicle.setSteeringValue(currentSteeringAngle, i);
+  }
 }
 
 // Start initialization
