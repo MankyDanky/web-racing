@@ -12,7 +12,7 @@ let debugObjects = [];
 const clock = new THREE.Clock();
 
 // Car components
-let carBody, carChassis;
+let carBody;
 let vehicle; // Ammo.js vehicle instance
 let wheelMeshes = [];
 let carModel;
@@ -163,15 +163,6 @@ function createGround(ammo) {
 
 // Create vehicle with wheel physics
 function createVehicle(ammo) {
-  // Create chassis visual
-  const chassisGeometry = new THREE.BoxGeometry(VEHICLE_WIDTH, VEHICLE_HEIGHT, VEHICLE_LENGTH);
-  const chassisMaterial = new THREE.MeshStandardMaterial({ color: 0x2222dd });
-  carChassis = new THREE.Mesh(chassisGeometry, chassisMaterial);
-  carChassis.position.set(0, 1, 0);
-  carChassis.castShadow = true;
-  carChassis.receiveShadow = true;
-  scene.add(carChassis);
-  
   // Create chassis physics body
   const chassisShape = new ammo.btBoxShape(
     new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2, VEHICLE_LENGTH/2)
@@ -209,13 +200,13 @@ function createVehicle(ammo) {
   
   // Add all four wheels
   const wheelPositions = [
-    { x: -WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET }, // Front left
-    { x: WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET },  // Front right
-    { x: -WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET }, // Rear left
-    { x: WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET }  // Rear right
+    { x: -WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Front left
+    { x: WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  // Front right
+    { x: -WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, // Back left
+    { x: WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  // Back right
   ];
   
-  // Create wheels with visual and physics
+  // Create wheels with physics (but without visuals yet)
   for (let i = 0; i < wheelPositions.length; i++) {
     const pos = wheelPositions[i];
     const isFront = i < 2; // First two are front wheels
@@ -240,27 +231,103 @@ function createVehicle(ammo) {
     wheelInfo.set_m_frictionSlip(WHEEL_FRICTION);
     wheelInfo.set_m_rollInfluence(ROLL_INFLUENCE);
     
-    // Create wheel visual
-    const wheelGeometry = new THREE.CylinderGeometry(
-      WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 24
-    );
-    wheelGeometry.rotateZ(Math.PI/2); // Align with X axis
-    
-    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
-    const wheelMesh = new THREE.Mesh(wheelGeometry, wheelMaterial);
-    wheelMesh.castShadow = true;
-    scene.add(wheelMesh);
-    wheelMeshes.push(wheelMesh);
-    
-    // Create wheel debug visualization
-    createWheelDebugVisual(pos, ammo);
+    // Add a placeholder for the wheel mesh
+    wheelMeshes.push(null);
   }
   
   // Create debug visualization for chassis
   createChassisDebugVisual(ammo);
   
-  // Remember car reference for updating
-  rigidBodies.push({ mesh: carChassis, body: carBody });
+  // Load the car model
+  loadCarModel(ammo, wheelPositions);
+}
+
+// Function to load the car model
+function loadCarModel(ammo, wheelPositions) {
+  const loader = new GLTFLoader();
+  
+  loader.load(
+    '/models/car.glb',
+    (gltf) => {
+      carModel = gltf.scene;
+      
+      // Adjust model scale and position if needed
+      carModel.scale.set(4, 4, 4); // Adjust scale as needed
+      carModel.position.set(0, 0, 0); // Position will be updated by physics
+      
+      // Make sure car casts shadows
+      carModel.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = false;
+        }
+      });
+      
+      // Find wheel meshes in the car model
+      let wheelMeshFL = carModel.getObjectByName('wheel-fr');
+      let wheelMeshFR = carModel.getObjectByName('wheel-fl');
+      let wheelMeshBL = carModel.getObjectByName('wheel-br');
+      let wheelMeshBR = carModel.getObjectByName('wheel-bl');
+
+      
+      const wheelModelMeshes = [wheelMeshFL, wheelMeshFR, wheelMeshBL, wheelMeshBR];
+      
+      // Store reference to wheel meshes and detach them from car model
+      for (let i = 0; i < wheelModelMeshes.length; i++) {
+        if (wheelModelMeshes[i]) {
+          // Get the original world matrix before removal to preserve transformations
+          wheelModelMeshes[i].updateMatrixWorld(true);
+          
+          // Remove from car model
+          carModel.remove(wheelModelMeshes[i]);
+          
+          // Add directly to scene so we can control it separately
+          scene.add(wheelModelMeshes[i]);
+          
+          // Apply the same scale as the car model
+          wheelModelMeshes[i].scale.set(4, 4, 4);
+          
+          // Save reference
+          wheelMeshes[i] = wheelModelMeshes[i];
+          
+          console.log(`Found and set up wheel: ${wheelPositions[i].name}`);
+        } else {
+          console.warn(`Could not find wheel mesh: ${wheelPositions[i].name}`);
+          
+          // Create a default wheel as fallback
+          const wheelGeometry = new THREE.CylinderGeometry(
+            WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 24
+          );
+          wheelGeometry.rotateZ(Math.PI/2); // Align with X axis
+          
+          const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+          const wheelMesh = new THREE.Mesh(wheelGeometry, wheelMaterial);
+          wheelMesh.castShadow = true;
+          scene.add(wheelMesh);
+          
+          // Scale the default wheel to match too
+          wheelMesh.scale.set(4, 4, 4);
+          
+          // Use this default wheel
+          wheelMeshes[i] = wheelMesh;
+        }
+      }
+      
+      // Add car model to scene
+      scene.add(carModel);
+            
+      // Store reference to update visual position
+      rigidBodies.push({ mesh: carModel, body: carBody });
+      
+      console.log('Car model loaded successfully');
+    },
+    (xhr) => {
+      console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+    },
+    (error) => {
+      console.error('Error loading car model:', error);
+    }
+  );
 }
 
 // Create debug visualization for the chassis
@@ -275,31 +342,6 @@ function createChassisDebugVisual(ammo) {
   const chassisDebug = new THREE.Mesh(boxGeometry, boxMaterial);
   scene.add(chassisDebug);
   debugObjects.push({ mesh: chassisDebug, body: carBody, isWheel: false });
-}
-
-// Create debug visualization for wheels
-function createWheelDebugVisual(position, ammo) {
-  const cylGeometry = new THREE.CylinderGeometry(
-    WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 16
-  );
-  cylGeometry.rotateZ(Math.PI/2);
-  
-  const cylMaterial = new THREE.MeshBasicMaterial({
-    color: 0x00ff00,
-    wireframe: true,
-    opacity: 0.7,
-    transparent: true
-  });
-  
-  const cylMesh = new THREE.Mesh(cylGeometry, cylMaterial);
-  cylMesh.position.set(position.x, position.y + 0.3, position.z);
-  scene.add(cylMesh);
-  
-  debugObjects.push({ 
-    mesh: cylMesh, 
-    isWheel: true,
-    wheelIndex: debugObjects.length 
-  });
 }
 
 // Setup key controls for vehicle
@@ -321,7 +363,7 @@ function setupKeyControls() {
 
 // Update physics
 function updatePhysics(deltaTime, ammo) {
-  if (!vehicle) return;
+  if (!vehicle || !carModel) return;
   
   // Apply steering based on keyboard input
   const steeringIncrement = 0.04;
@@ -341,7 +383,7 @@ function updatePhysics(deltaTime, ammo) {
     // FIXED SECTION: Use Three.js for vector math instead of Ammo.js
   // Get forward direction using Three.js
   const carForward = new THREE.Vector3();
-  carChassis.getWorldDirection(carForward);
+  carModel.getWorldDirection(carForward);
   
   // Convert Ammo velocity to Three.js vector
   const velocityThree = new THREE.Vector3(
@@ -352,7 +394,6 @@ function updatePhysics(deltaTime, ammo) {
   
   // Calculate dot product using Three.js
   const dotForward = carForward.dot(velocityThree);
-  
   const maxEngineForce = 2000;
   const maxBrakingForce = 300;
   let engineForce = 0;
@@ -400,9 +441,11 @@ function updatePhysics(deltaTime, ammo) {
   const chassisWorldTrans = vehicle.getChassisWorldTransform();
   const position = chassisWorldTrans.getOrigin();
   const quaternion = chassisWorldTrans.getRotation();
-  
-  carChassis.position.set(position.x(), position.y(), position.z());
-  carChassis.quaternion.set(quaternion.x(), quaternion.y(), quaternion.z(), quaternion.w());
+
+  // Use either car model or chassis based on what's available
+  const carVisual = carModel;
+  carVisual.position.set(position.x(), position.y(), position.z());
+  carVisual.quaternion.set(quaternion.x(), quaternion.y(), quaternion.z(), quaternion.w());
   
   // Update wheel transforms
   for (let i = 0; i < vehicle.getNumWheels(); i++) {
