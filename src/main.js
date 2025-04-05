@@ -52,142 +52,6 @@ const STEERING_SPEED = 2;    // Speed of steering adjustment
 const STEERING_RETURN_SPEED = 2; // Speed of returning to center
 let currentSteeringAngle = 0;   // Current steering angle
 
-// Track piece metadata - stores connection information for each piece
-const trackPieceData = {
-  'track-road-wide-straight': {
-    length: 4,
-    endOffset: [0, 0, 4],
-    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
-    startOrientation: [0, 0, 0],
-    endOrientation: [0, 0, 0]  // No rotation change
-  },
-  'track-road-wide-corner-large': {
-    length: 6,
-    endOffset: [-3.8, 0, 4.1],  // This turns 90 degrees, ending offset is to the right
-    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
-    startOrientation: [0, 0, 0],
-    endOrientation: [0, -Math.PI/2, 0]  // Turns 90 degrees right
-  },
-  'track-road-wide-corner-small': {
-    length: 3,
-    endOffset: [-1.8, 0, 2.1],  // Tighter turn
-    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
-    startOrientation: [0, 0, 0],
-    endOrientation: [0, -Math.PI/2, 0]  // Turns 90 degrees right
-  },
-  'track-road-wide-curve': {
-    length: 4,
-    endOffset: [-2, 0, 4],  // Slight curve to the right
-    canConnect: ['track-road-wide-straight', 'track-road-wide-corner-large', 'track-road-wide-corner-small', 'track-road-wide-curve'],
-    startOrientation: [0, 0, 0],
-    endOrientation: [0, 0, 0]  // Slight turn (adjust angle as needed)
-  },
-  'track-road-wide-corner-large-ramp': {
-    length: 6,
-    endOffset: [4, 1, 4],  // Ramp goes up 1 unit
-    canConnect: ['track-road-wide-straight', 'track-road-wide-straight-bend'],
-    startOrientation: [0, 0, 0],
-    endOrientation: [0, Math.PI/2, 0]  // Turns 90 degrees right with elevation
-  },
-  'track-road-wide-straight-bend': {
-    length: 4,
-    endOffset: [0, 0.5, 4],  // Bends upward
-    canConnect: ['track-road-wide-straight', 'track-road-wide-straight-bend'],
-    startOrientation: [0, 0, 0],
-    endOrientation: [0, 0, 0]  // Slight upward angle
-  }
-};
-
-// Function to generate random track
-function generateRandomTrack(numPieces, startX = 0, startY = 0, startZ = -1) {
-  // Start with a straight piece
-  let currentPieceType = 'track-road-wide-straight';
-  let currentPosition = [startX, startY, startZ];
-  let currentRotation = [0, 0, 0];
-  let currentDirection = new THREE.Vector3(0, 0, 1); // Start moving in Z+ direction
-  
-  // Add track-end at the start (barrier)
-  const trackData = {
-    track: [
-      {
-        type: 'track-end',
-        position: [currentPosition[0], currentPosition[1], currentPosition[2] +0.3],
-        rotation: [0, Math.PI, 0] // Facing toward the track
-      }
-    ]
-  };
-  
-  // Generate the track pieces
-  for (let i = 0; i < numPieces; i++) {
-    // Add the current piece
-    trackData.track.push({
-      type: currentPieceType,
-      position: [...currentPosition],
-      rotation: [...currentRotation]
-    });
-    
-    // Get current piece data
-    const pieceData = trackPieceData[currentPieceType];
-    
-    // Calculate the end position in local space
-    const endOffsetLocal = new THREE.Vector3(...pieceData.endOffset);
-    
-    // Apply current rotation to the end offset to get world space offset
-    const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(
-      new THREE.Euler(currentRotation[0], currentRotation[1], currentRotation[2])
-    );
-    
-    endOffsetLocal.applyMatrix4(rotationMatrix);
-    
-    // Calculate the next position
-    const nextPosition = [
-      currentPosition[0] + endOffsetLocal.x,
-      currentPosition[1] + endOffsetLocal.y,
-      currentPosition[2] + endOffsetLocal.z
-    ];
-    
-    // Update direction based on end orientation of current piece
-    const endRotation = [
-      currentRotation[0] + pieceData.endOrientation[0],
-      currentRotation[1] + pieceData.endOrientation[1],
-      currentRotation[2] + pieceData.endOrientation[2]
-    ];
-    
-    // Choose next piece (randomly select from valid connections)
-    const validConnections = pieceData.canConnect;
-    const nextPieceType = validConnections[Math.floor(Math.random() * validConnections.length)];
-    
-    // Update current state
-    currentPosition = nextPosition;
-    currentRotation = endRotation;
-    currentPieceType = nextPieceType;
-  }
-  
-  // Add track-end at the end (barrier)
-  // Calculate position slightly beyond last piece
-  const lastPiece = trackData.track[trackData.track.length - 1];
-  const lastPieceData = trackPieceData[lastPiece.type];
-  
-  const lastDirection = new THREE.Vector3(0, 0, 1);
-  const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(
-    new THREE.Euler(lastPiece.rotation[0], lastPiece.rotation[1], lastPiece.rotation[2])
-  );
-  lastDirection.applyMatrix4(rotationMatrix);
-  lastDirection.normalize().multiplyScalar(0.4);
-  
-  trackData.track.push({
-    type: 'track-end',
-    position: [
-      currentPosition[0],
-      currentPosition[1],
-      currentPosition[2]
-    ],
-    rotation: [...currentRotation] // Same rotation as last track piece
-  });
-  console.log(trackData);
-  return trackData;
-}
-
 // Initialize everything
 function init() {
   const loadingEl = document.createElement('div');
@@ -209,26 +73,13 @@ function init() {
   // Setup scene
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
+  setupEnhancedLighting();
   
   // Setup lighting
-  const ambientLight = new THREE.AmbientLight(0x707070);
-  scene.add(ambientLight);
-  
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-  directionalLight.position.set(10, 20, 10);
-  directionalLight.castShadow = true;
-  directionalLight.shadow.mapSize.width = 2048;
-  directionalLight.shadow.mapSize.height = 2048;
-  directionalLight.shadow.camera.near = 0.1;
-  directionalLight.shadow.camera.far = 50;
-  directionalLight.shadow.camera.left = -20;
-  directionalLight.shadow.camera.right = 20;
-  directionalLight.shadow.camera.top = 20;
-  directionalLight.shadow.camera.bottom = -20;
-  scene.add(directionalLight);
+  setupEnhancedLighting();
   
   // Setup camera
-  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 10, 20);
   
   // Setup renderer
@@ -254,24 +105,18 @@ function init() {
     initPhysics(ammo);
     createGround(ammo);
     
-    // Preload track pieces first
-    preloadTrackPieces(() => {
-      // Generate random track with 10 pieces
-      const trackData = generateRandomTrack(10);
-      
-      // Build the visual track
-      const track = buildTrack(trackData);
-      
-      // Add physics to the track
-      addTrackPhysics(trackData, ammo);
-      
-      // Now create the vehicle (after track is ready)
-      createVehicle(ammo);
-      setupKeyControls();
-      
-      // Start animation loop
-      animate();
-    });
+    // Load the track as a single model
+    loadTrackModel(ammo, "map1");
+    
+    // Load map decorations
+    loadMapDecorations("map1");
+    
+    // Now create the vehicle
+    createVehicle(ammo);
+    setupKeyControls();
+    
+    // Start animation loop
+    animate();
   });
 }
 
@@ -321,7 +166,7 @@ function createVehicle(ammo) {
   
   const chassisTransform = new ammo.btTransform();
   chassisTransform.setIdentity();
-  chassisTransform.setOrigin(new ammo.btVector3(0, 3, 0));
+  chassisTransform.setOrigin(new ammo.btVector3(0, 5, 0));
   
   const chassisMotionState = new ammo.btDefaultMotionState(chassisTransform);
   const chassisMass = 800;
@@ -946,6 +791,146 @@ function addTrackPhysics(trackData, ammoInstance) {
   });
 }
 
+// New function to load the entire track from a single model file
+function loadTrackModel(ammo, mapId = "map1") {
+  const loader = new GLTFLoader();
+  
+  loader.load(
+    `/models/maps/${mapId}/track.glb`,
+    (gltf) => {
+      const track = gltf.scene;
+      
+      // Scale to match the world scale
+      track.scale.set(8, 8, 8);
+      
+      // Position at origin
+      track.position.set(0, 0, 0);
+      track.rotation.set(0, 0, 0);
+      
+      // Make sure track casts and receives shadows
+      track.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true; // Enable for better lighting
+          
+          // Enhance track materials
+          if (node.material) {
+            node.material.roughness = 0.7;
+            node.material.metalness = 0.3;
+          }
+        }
+      });
+      
+      // Add to scene
+      scene.add(track);
+      console.log(`Map ${mapId} track loaded successfully`);
+      
+      // Add physics collider for the track
+      addTrackCollider(track, ammo);
+    },
+    (xhr) => {
+      console.log(`Loading track: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
+    },
+    (error) => {
+      console.error(`Error loading track for ${mapId}:`, error);
+    }
+  );
+}
+
+// Function to create a physics collider for the entire track
+function addTrackCollider(trackModel, ammo) {
+  // Extract all mesh geometries from the track
+  let vertices = [];
+  let indices = [];
+  let indexOffset = 0;
+  
+  // Update world matrix to apply all transformations
+  trackModel.updateMatrixWorld(true);
+  
+  // Traverse all meshes in the track model
+  trackModel.traverse(child => {
+    if (child.isMesh && child.geometry) {
+      // Get vertices
+      const positionAttr = child.geometry.getAttribute('position');
+      const vertexCount = positionAttr.count;
+      
+      // Apply mesh's transform to vertices
+      const worldMatrix = child.matrixWorld;
+      
+      // Extract vertices with transformation
+      for (let i = 0; i < vertexCount; i++) {
+        const vertex = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
+        vertex.applyMatrix4(worldMatrix);
+        
+        vertices.push(vertex.x, vertex.y, vertex.z);
+      }
+      
+      // Get indices - if they exist
+      if (child.geometry.index) {
+        const indices32 = child.geometry.index.array;
+        for (let i = 0; i < indices32.length; i++) {
+          indices.push(indices32[i] + indexOffset);
+        }
+      } else {
+        // No indices - assume vertices are already arranged as triangles
+        for (let i = 0; i < vertexCount; i++) {
+          indices.push(i + indexOffset);
+        }
+      }
+      
+      indexOffset += vertexCount;
+    }
+  });
+  
+  // Create Ammo triangle mesh
+  const triangleMesh = new ammo.btTriangleMesh();
+  
+  // Add all triangles to the mesh
+  for (let i = 0; i < indices.length; i += 3) {
+    const i1 = indices[i] * 3;
+    const i2 = indices[i+1] * 3;
+    const i3 = indices[i+2] * 3;
+    
+    const v1 = new ammo.btVector3(vertices[i1], vertices[i1+1], vertices[i1+2]);
+    const v2 = new ammo.btVector3(vertices[i2], vertices[i2+1], vertices[i2+2]);
+    const v3 = new ammo.btVector3(vertices[i3], vertices[i3+1], vertices[i3+2]);
+    
+    triangleMesh.addTriangle(v1, v2, v3, false);
+    
+    // Clean up Ammo vectors
+    ammo.destroy(v1);
+    ammo.destroy(v2);
+    ammo.destroy(v3);
+  }
+  
+  // Create track collision shape using triangle mesh
+  const trackShape = new ammo.btBvhTriangleMeshShape(triangleMesh, true, true);
+  
+  // The rigid body uses identity transform since all transformations are in the vertices
+  const trackTransform = new ammo.btTransform();
+  trackTransform.setIdentity();
+  
+  // Create motion state
+  const motionState = new ammo.btDefaultMotionState(trackTransform);
+  
+  // Set up track rigid body (static - mass = 0)
+  const mass = 0;
+  const localInertia = new ammo.btVector3(0, 0, 0);
+  
+  // Create rigid body
+  const rbInfo = new ammo.btRigidBodyConstructionInfo(
+    mass, motionState, trackShape, localInertia
+  );
+  
+  const trackBody = new ammo.btRigidBody(rbInfo);
+  trackBody.setFriction(0.8); // Track should have good grip
+  
+  // Add to physics world
+  physicsWorld.addRigidBody(trackBody);
+  
+  console.log("Track physics collider created successfully");
+}
+
 // Modify animate function to use our camera system instead of OrbitControls
 function animate() {
   requestAnimationFrame(animate);
@@ -993,6 +978,114 @@ function updateSteering(deltaTime) {
   for (let i = 0; i < 2; i++) {
     vehicle.setSteeringValue(currentSteeringAngle, i);
   }
+}
+
+// Function to load map decorations from a combined model file
+function loadMapDecorations(mapId = "map1") {
+  const loader = new GLTFLoader();
+  
+  loader.load(
+    `/models/maps/${mapId}/decorations.glb`,
+    (gltf) => {
+      const decorations = gltf.scene;
+      
+      // Scale to match track scale
+      decorations.scale.set(8, 8, 8);
+      
+      // Position at origin
+      decorations.position.set(0, 0, 0);
+      decorations.rotation.set(0, 0, 0);
+      
+      // Make sure decorations cast and receive shadows
+      decorations.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true; // Changed to true!
+          
+          // Enhance materials if they exist
+          if (node.material) {
+            // Ensure materials respond better to lighting
+            node.material.roughness = 0.7;
+            node.material.metalness = 0.2;
+          }
+        }
+      });
+      
+      // Add to scene
+      scene.add(decorations);
+      console.log(`Map ${mapId} decorations loaded successfully`);
+    },
+    (xhr) => {
+      console.log(`Loading decorations: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
+    },
+    (error) => {
+      console.error(`Error loading map decorations for ${mapId}:`, error);
+    }
+  );
+}
+
+// Enhanced lighting system - add this function
+function setupEnhancedLighting() {
+  // Remove existing lights
+  scene.children.forEach(child => {
+    if (child.isLight) scene.remove(child);
+  });
+  
+  // Much brighter ambient light
+  const ambientLight = new THREE.AmbientLight(0xcccccc, 1.2);
+  scene.add(ambientLight);
+  
+  // Primary directional light (sun) - ADJUSTED POSITION
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.8);
+  directionalLight.position.set(40, 80, 30); // Lower, more overhead position
+  directionalLight.castShadow = true;
+  
+  // Increase shadow map size for better quality
+  directionalLight.shadow.mapSize.width = 2048;
+  directionalLight.shadow.mapSize.height = 2048;
+  
+  // Smaller, more focused shadow camera frustum
+  directionalLight.shadow.camera.near = 10;
+  directionalLight.shadow.camera.far = 200;
+  directionalLight.shadow.camera.left = -60;
+  directionalLight.shadow.camera.right = 60;
+  directionalLight.shadow.camera.top = 60;
+  directionalLight.shadow.camera.bottom = -60;
+  
+  // Improve shadow quality
+  directionalLight.shadow.bias = -0.0005; // Less aggressive bias
+  directionalLight.shadow.normalBias = 0.02; // Add normal bias
+  
+  // Add soft shadows
+  directionalLight.shadow.radius = 3; // Blur shadow edges
+  
+  scene.add(directionalLight);
+  
+  // Add a second directional light for dynamic shadows
+  const secondaryLight = new THREE.DirectionalLight(0xffffcc, 0.6);
+  secondaryLight.position.set(-30, 50, -30);
+  secondaryLight.castShadow = true;
+  secondaryLight.shadow.camera.near = 10;
+  secondaryLight.shadow.camera.far = 200;
+  secondaryLight.shadow.camera.left = -30;
+  secondaryLight.shadow.camera.right = 30;
+  secondaryLight.shadow.camera.top = 30;
+  secondaryLight.shadow.camera.bottom = -30;
+  secondaryLight.shadow.mapSize.width = 1024;
+  secondaryLight.shadow.mapSize.height = 1024;
+  secondaryLight.shadow.bias = -0.0003;
+  secondaryLight.shadow.radius = 2;
+  scene.add(secondaryLight);
+  
+  // Add hemisphere light for better environmental lighting
+  const hemisphereLight = new THREE.HemisphereLight(
+    0xaaccff, // Sky color - slight blue
+    0x70a070,  // Ground color - slight green
+    1.0        // Intensity
+  );
+  scene.add(hemisphereLight);
+  
+  console.log("Enhanced lighting setup applied");
 }
 
 // Start initialization
