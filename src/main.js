@@ -52,6 +52,13 @@ const STEERING_SPEED = 2;    // Speed of steering adjustment
 const STEERING_RETURN_SPEED = 2; // Speed of returning to center
 let currentSteeringAngle = 0;   // Current steering angle
 
+// UI variables
+let speedElement;
+let needleElement;
+let speedValueElement;
+let currentSpeed = 0;
+const MAX_SPEED_KPH = 200; // Maximum speed on the gauge
+
 // Initialize everything
 function init() {
   const loadingEl = document.createElement('div');
@@ -72,7 +79,7 @@ function init() {
 
   // Setup scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x87ceeb);
+  scene.background = new THREE.Color(0x66ccff);
   setupEnhancedLighting();
   
   // Setup lighting
@@ -84,10 +91,14 @@ function init() {
   
   // Setup renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.outputEncoding = THREE.sRGBEncoding;  // or THREE.LinearSRGBEncoding in newer Three.js
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   document.body.appendChild(renderer.domElement);
+  
+  // Initialize UI
+  initUI();
   
   // Handle window resize
   window.addEventListener('resize', () => {
@@ -416,6 +427,12 @@ function updatePhysics(deltaTime, ammo) {
     // Braking force to all wheels for better braking
     vehicle.setBrake(brakingForce, i);
   }
+  
+  // Calculate car speed in km/h (assuming your units are meters)
+  const speedKPH = velocityThree.length() * 3.6; // Convert m/s to km/h
+  
+  // Update speedometer UI
+  updateSpeedometer(speedKPH);
   
   // Clean up Ammo.js objects to prevent memory leaks
   ammo.destroy(velocity);
@@ -1086,6 +1103,39 @@ function setupEnhancedLighting() {
   scene.add(hemisphereLight);
   
   console.log("Enhanced lighting setup applied");
+}
+
+// Function to initialize UI elements
+function initUI() {
+  speedElement = document.querySelector('.gauge-fill');
+  needleElement = document.querySelector('.gauge-needle');
+  speedValueElement = document.querySelector('.speed-value');
+  
+  if (!speedElement || !needleElement || !speedValueElement) {
+    console.error('Speedometer elements not found');
+  }
+}
+
+// Function to update the speedometer with perfect alignment
+function updateSpeedometer(speed) {
+  // Smooth the speed change
+  currentSpeed = currentSpeed * 0.9 + speed * 0.1;
+  
+  // Get speed as percentage of max speed
+  const speedPercent = Math.min(currentSpeed / MAX_SPEED_KPH, 1);
+  
+  // Calculate rotation - 180 degrees is full scale
+  const fillRotation = speedPercent * 180;
+  
+  // Update the gauge fill rotation
+  speedElement.style.transform = `rotate(${fillRotation}deg)`;
+  
+  // Update the needle rotation to perfectly align with the gauge fill
+  // Use the same exact rotation as the fill since we want them to align perfectly
+  needleElement.style.transform = `rotate(${fillRotation - 90}deg)`;
+  
+  // Update the numeric display, rounded to integer
+  speedValueElement.textContent = Math.round(currentSpeed);
 }
 
 // Start initialization
