@@ -114,7 +114,6 @@ function init() {
     document.body.removeChild(loadingEl);
     
     initPhysics(ammo);
-    createGround(ammo);
     
     // Load the track as a single model
     loadTrackModel(ammo, "map1");
@@ -145,27 +144,6 @@ function initPhysics(ammo) {
   
   // Create temporary transform for reuse
   tmpTrans = new ammo.btTransform();
-}
-
-// Modified ground function without physics
-function createGround(ammo) {
-  // Visual ground only - large grass plane
-  const groundGeometry = new THREE.PlaneGeometry(1000, 1000); // Much larger plane
-  const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x50C878, // Green color for grass
-    roughness: 0.8,
-    metalness: 0.1
-  });
-  const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-  groundMesh.rotation.x = -Math.PI / 2;
-  groundMesh.receiveShadow = true;
-  scene.add(groundMesh);
-  
-  // Position it slightly below zero to avoid Z-fighting with track
-  groundMesh.position.y = -0.01;
-  
-  // NO PHYSICS COLLIDER ADDED
-  console.log("Created visual grass plane without collider");
 }
 
 // Create vehicle with wheel physics
@@ -1048,61 +1026,25 @@ function setupEnhancedLighting() {
     if (child.isLight) scene.remove(child);
   });
   
-  // Much brighter ambient light
-  const ambientLight = new THREE.AmbientLight(0xcccccc, 1.2);
+  // Reduce ambient light intensity for better shadow definition
+  const ambientLight = new THREE.AmbientLight(0xcccccc, 0.3); // Reduced from 0.5
   scene.add(ambientLight);
   
-  // Primary directional light (sun) - ADJUSTED POSITION
+  // Primary directional light (sun)
   const directionalLight = new THREE.DirectionalLight(0xffffff, 1.8);
-  directionalLight.position.set(40, 80, 30); // Lower, more overhead position
-  directionalLight.castShadow = true;
-  
-  // Increase shadow map size for better quality
-  directionalLight.shadow.mapSize.width = 2048;
-  directionalLight.shadow.mapSize.height = 2048;
-  
-  // Smaller, more focused shadow camera frustum
-  directionalLight.shadow.camera.near = 10;
-  directionalLight.shadow.camera.far = 200;
-  directionalLight.shadow.camera.left = -60;
-  directionalLight.shadow.camera.right = 60;
-  directionalLight.shadow.camera.top = 60;
-  directionalLight.shadow.camera.bottom = -60;
-  
-  // Improve shadow quality
-  directionalLight.shadow.bias = -0.0005; // Less aggressive bias
-  directionalLight.shadow.normalBias = 0.02; // Add normal bias
-  
-  // Add soft shadows
-  directionalLight.shadow.radius = 3; // Blur shadow edges
+  directionalLight.position.set(40, 80, 30);
   
   scene.add(directionalLight);
   
-  // Add a second directional light for dynamic shadows
+  // Second light with wider frustum but lower resolution for distant shadows
   const secondaryLight = new THREE.DirectionalLight(0xffffcc, 0.6);
   secondaryLight.position.set(-30, 50, -30);
-  secondaryLight.castShadow = true;
-  secondaryLight.shadow.camera.near = 10;
-  secondaryLight.shadow.camera.far = 200;
-  secondaryLight.shadow.camera.left = -30;
-  secondaryLight.shadow.camera.right = 30;
-  secondaryLight.shadow.camera.top = 30;
-  secondaryLight.shadow.camera.bottom = -30;
-  secondaryLight.shadow.mapSize.width = 1024;
-  secondaryLight.shadow.mapSize.height = 1024;
-  secondaryLight.shadow.bias = -0.0003;
-  secondaryLight.shadow.radius = 2;
+  
   scene.add(secondaryLight);
   
-  // Add hemisphere light for better environmental lighting
-  const hemisphereLight = new THREE.HemisphereLight(
-    0xaaccff, // Sky color - slight blue
-    0x70a070,  // Ground color - slight green
-    1.0        // Intensity
-  );
+  // Add hemisphere light
+  const hemisphereLight = new THREE.HemisphereLight(0xaaccff, 0x70a070, 0.7); // Reduced from 1.0
   scene.add(hemisphereLight);
-  
-  console.log("Enhanced lighting setup applied");
 }
 
 // Function to initialize UI elements
