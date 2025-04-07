@@ -23,7 +23,7 @@ class RacingLobby {
       this.hostInfo = document.getElementById('host-info');
       this.partyCodeDisplay = document.getElementById('party-code');
       this.copyCodeBtn = document.getElementById('copy-code-btn');
-      this.trackSelect = document.getElementById('track-select');
+      this.playBtn = document.getElementById('host-play-btn');
       
       // Join elements
       this.joinCodeInput = document.getElementById('join-code-input');
@@ -33,8 +33,8 @@ class RacingLobby {
       // Player list
       this.playerList = document.getElementById('player-list');
       
-      // Play button
-      this.playBtn = document.getElementById('play-btn');
+      // Show code display when host creates a party
+      document.getElementById('code-display').classList.remove('hidden');
     }
     
     initPeerJS() {
@@ -99,7 +99,8 @@ class RacingLobby {
         if (this.isHost) {
           const gameConfig = {
             type: 'startGame',
-            trackId: this.trackSelect.value,
+            // Use hardcoded map ID instead of trackSelect.value
+            trackId: 'map1',
             players: this.players
           };
           
@@ -294,14 +295,15 @@ class RacingLobby {
             conn.send({
               type: 'partyState',
               players: this.players,
-              trackId: this.trackSelect.value
+              // Use hardcoded map ID
+              trackId: 'map1'
             });
             
             // Notify other players about the new player
             this.broadcastToAll({
               type: 'playerJoined',
               player: newPlayer
-            }, conn.peer); // Don't send to the player who just joined
+            }, conn.peer);
           }
           break;
           
@@ -372,7 +374,8 @@ class RacingLobby {
         this.broadcastToAll({
           type: 'partyState',
           players: this.players,
-          trackId: this.trackSelect.value
+          // Use hardcoded map ID
+          trackId: 'map1'
         });
       }
     }
