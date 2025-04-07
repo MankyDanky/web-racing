@@ -1128,57 +1128,87 @@ function updateSpeedometer(speed) {
   speedValueElement.textContent = Math.round(currentSpeed);
 }
 
-// Initialize the peer connection
+// Update your initPeerConnection function
+
 function initPeerConnection() {
-  // If we have game config, use that instead of creating new connections
-  if (gameConfig) {
-    peer = new Peer(localStorage.getItem('myPlayerId'));
+  // Get the player ID that was stored during lobby creation
+  const myPlayerId = localStorage.getItem('myPlayerId');
+  
+  if (!myPlayerId) {
+    console.error('No player ID found in localStorage');
+    return;
+  }
+  
+  // If we have game config, use that to establish connections
+  if (gameConfig && gameConfig.players && gameConfig.players.length > 0) {
+    console.log('Initializing peer connection with game config', gameConfig);
     
-    if (isHost) {
-      // Host will accept connections from all other players
-      peer.on('connection', (conn) => {
-        playerConnections.push(conn);
-        handlePlayerConnection(conn);
-      });
-    } else {
-      // Connect to host
-      const hostPlayer = gameConfig.players.find(player => player.isHost);
-      if (hostPlayer) {
-        const conn = peer.connect(hostPlayer.id);
-        conn.on('open', () => {
+    // Create peer with a NEW ID based on the original ID plus "-game"
+    // This ensures we don't conflict with the lobby connection
+    peer = new Peer(myPlayerId + "-game");
+    
+    peer.on('open', (id) => {
+      console.log('Game peer connection established with ID:', id);
+      
+      if (isHost) {
+        console.log('Playing as host - waiting for player connections');
+        
+        // Host waits for connections from players
+        peer.on('connection', (conn) => {
+          console.log('Player connected:', conn.peer);
           playerConnections.push(conn);
           handlePlayerConnection(conn);
         });
+        
+        // Load opponent car models
+        loadOpponentCarModels();
+      } else {
+        console.log('Playing as guest - connecting to host');
+        
+        // Find the host player
+        const hostPlayer = gameConfig.players.find(player => player.isHost);
+        
+        if (hostPlayer) {
+          console.log('Connecting to host:', hostPlayer.id);
+          
+          // Connect to host with the modified game ID
+          const conn = peer.connect(hostPlayer.id + "-game");
+          
+          conn.on('open', () => {
+            console.log('Connected to host!');
+            playerConnections.push(conn);
+            handlePlayerConnection(conn);
+            loadOpponentCarModels();
+          });
+          
+          conn.on('error', (err) => {
+            console.error('Error connecting to host:', err);
+          });
+        } else {
+          console.error('No host player found in game config');
+        }
       }
-    }
+    });
+    
+    peer.on('error', (err) => {
+      console.error('Peer connection error:', err);
+      // If error is "ID is taken", try with a different suffix
+      if (err.type === 'unavailable-id') {
+        console.log('Trying alternative peer ID...');
+        // Create a new peer with random ID but store our real ID in metadata
+        peer = new Peer();
+        // The rest of the connection logic will happen in the 'open' event
+      }
+    });
   } else {
-    // Original peer connection code for direct connections
-    peer = new Peer();
-    
-    peer.on('open', (id) => {
-      document.getElementById('my-id').textContent = id;
-      console.log('My peer ID is: ' + id);
-    });
-    
-    peer.on('connection', (conn) => {
-      handleConnection(conn);
-    });
+    console.warn('No game config found - multiplayer disabled');
   }
-  
-  // Error handling remains the same
-  peer.on('error', (err) => {
-    console.error('Peer connection error:', err);
-    if (document.getElementById('connection-status')) {
-      document.getElementById('connection-status').textContent = 'Connection error: ' + err.type;
-    }
-  });
-  
-  // Load opponent car models for all players in the party
-  loadOpponentCarModels();
 }
 
-// New function to handle party player connections
+// Improved player connection handler
 function handlePlayerConnection(conn) {
+  console.log('Handling player connection:', conn.peer);
+  
   // Handle incoming data from any player
   conn.on('data', (data) => {
     if (data.type === 'carUpdate') {
@@ -1192,10 +1222,36 @@ function handlePlayerConnection(conn) {
     conn.on('data', (data) => {
       // Relay this player's position to all other players
       playerConnections.forEach(otherConn => {
-        if (otherConn !== conn) {
+        if (otherConn.peer !== conn.peer) {
           otherConn.send(data);
         }
       });
+    });
+  }
+  
+  // Handle connection closing
+  conn.on('close', () => {
+    console.log('Player disconnected:', conn.peer);
+    // Remove from connections list
+    playerConnections = playerConnections.filter(c => c.peer !== conn.peer);
+  });
+  
+  // Send initial state to the newly connected player
+  if (carModel && isHost) {
+    conn.send({
+      type: 'carUpdate',
+      playerId: peer.id,
+      position: {
+        x: carModel.position.x,
+        y: carModel.position.y,
+        z: carModel.position.z
+      },
+      quaternion: {
+        x: carModel.quaternion.x,
+        y: carModel.quaternion.y,
+        z: carModel.quaternion.z,
+        w: carModel.quaternion.w
+      }
     });
   }
 }
@@ -1210,7 +1266,8 @@ function loadOpponentCarModels() {
     // Don't create a model for ourselves
     if (player.id === myPlayerId) return;
     
-    loadOpponentCarModel(player.id);
+    // Use the game ID format to match incoming data
+    loadOpponentCarModel(player.id + "-game");
   });
 }
 
@@ -1258,8 +1315,24 @@ function loadOpponentCarModel(playerId) {
 
 // Update a specific opponent's car position
 function updateOpponentCarPosition(playerId, data) {
-  const opponent = opponentCars[playerId];
-  if (!opponent || !opponent.model) return;
+  // Try to find opponent with exact ID
+  let opponent = opponentCars[playerId];
+  
+  // If not found, check if this is a base ID without "-game" suffix
+  if (!opponent && !playerId.endsWith("-game")) {
+    opponent = opponentCars[playerId + "-game"];
+  }
+  
+  // If not found, check if this is an ID with "-game" suffix
+  if (!opponent && playerId.endsWith("-game")) {
+    const baseId = playerId.replace("-game", "");
+    opponent = opponentCars[baseId];
+  }
+  
+  if (!opponent || !opponent.model) {
+    console.log(`No opponent model found for ID: ${playerId}`);
+    return;
+  }
   
   // Update last seen timestamp
   opponent.lastUpdate = Date.now();
@@ -1282,9 +1355,8 @@ function updateOpponentCarPosition(playerId, data) {
   );
 }
 
-// Modified send car data to work with multiple connections
 function sendCarData() {
-  if (!carModel || playerConnections.length === 0) return;
+  if (!carModel || !peer || playerConnections.length === 0) return;
   
   // Prepare the data packet
   const carData = {
@@ -1303,15 +1375,17 @@ function sendCarData() {
     }
   };
   
-  // If we're the host, send to all connected players
-  if (isHost) {
-    playerConnections.forEach(conn => {
-      conn.send(carData);
-    });
-  } else {
-    // Otherwise just send to the host
-    playerConnections[0]?.send(carData);
-  }
+  // Send to all connected players
+  playerConnections.forEach(conn => {
+    try {
+      // Check if connection is open before sending
+      if (conn && conn.open) {
+        conn.send(carData);
+      }
+    } catch (err) {
+      console.error('Error sending car data:', err);
+    }
+  });
 }
 
 // Start initialization

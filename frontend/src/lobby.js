@@ -43,6 +43,8 @@ class RacingLobby {
       
       this.peer.on('open', (id) => {
         this.playerId = id;
+        // Store playerId in localStorage so it persists between pages
+        localStorage.setItem('myPlayerId', id);
         console.log('My peer ID is: ' + id);
       });
       
