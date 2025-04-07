@@ -95,3 +95,73 @@ html, body {
   color: #aaa;
   text-align: center;
 }
+
+#connection-ui {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 5px;
+  color: white;
+  width: 250px;
+}
+
+.connection-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#my-id-container {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#my-id {
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#copy-id {
+  background: #4CAF50;
+  border: none;
+  color: white;
+  padding: 2px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#connect-container {
+  display: flex;
+  gap: 5px;
+}
+
+#peer-id-input {
+  flex-grow: 1;
+  padding: 5px;
+  border-radius: 3px;
+  border: none;
+}
+
+#connect-button {
+  background: #2196F3;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#connection-status {
+  text-align: center;
+  font-style: italic;
+  font-size: 0.9em;
+}

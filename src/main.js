@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import "./style.css";
 import Ammo from './lib/ammo.js';
+import Peer from 'peerjs';
 
 // Global variables
 let camera, scene, renderer, controls;
@@ -58,6 +59,16 @@ let needleElement;
 let speedValueElement;
 let currentSpeed = 0;
 const MAX_SPEED_KPH = 200; // Maximum speed on the gauge
+
+// Multiplayer variables
+let peer;
+let connection;
+let opponentCarModel;
+let opponentCarData = {
+  position: { x: 0, y: 0, z: 0 },
+  quaternion: { x: 0, y: 0, z: 0, w: 1 },
+  wheelPositions: []
+};
 
 // Initialize everything
 function init() {
@@ -124,6 +135,9 @@ function init() {
     // Now create the vehicle
     createVehicle(ammo);
     setupKeyControls();
+    
+    // Initialize peer connection for multiplayer
+    initPeerConnection();
     
     // Start animation loop
     animate();
@@ -468,6 +482,9 @@ function updatePhysics(deltaTime, ammo) {
       }
     }
   });
+  
+  // Send car data to connected peer
+  sendCarData();
 }
 
 // Add this new camera update function
@@ -934,6 +951,11 @@ function animate() {
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
     updateCamera(); // Add this line to update the camera each frame
+    
+    // Send car data every few frames to reduce bandwidth
+    if (Math.random() < 0.2) { // ~20% chance each frame, or about 12 updates per second
+      sendCarData();
+    }
   }
   
   // Remove the controls.update() line since we're using our own camera system
@@ -1078,6 +1100,182 @@ function updateSpeedometer(speed) {
   
   // Update the numeric display, rounded to integer
   speedValueElement.textContent = Math.round(currentSpeed);
+}
+
+// Initialize the peer connection
+function initPeerConnection() {
+  // Create a new Peer with a random ID
+  peer = new Peer();
+  
+  // When we get our ID, display it in the UI
+  peer.on('open', (id) => {
+    document.getElementById('my-id').textContent = id;
+    console.log('My peer ID is: ' + id);
+  });
+  
+  // Handle incoming connections
+  peer.on('connection', (conn) => {
+    handleConnection(conn);
+  });
+  
+  // Handle connection errors
+  peer.on('error', (err) => {
+    console.error('Peer connection error:', err);
+    document.getElementById('connection-status').textContent = 'Connection error: ' + err.type;
+  });
+  
+  // Setup the UI buttons
+  setupConnectionUI();
+  
+  // Load opponent car model
+  loadOpponentCarModel();
+}
+
+// Handle the connection (both incoming and outgoing)
+function handleConnection(conn) {
+  // Close existing connection if any
+  if (connection) {
+    connection.close();
+  }
+  
+  // Set the new connection
+  connection = conn;
+  
+  // Update the UI
+  document.getElementById('connection-status').textContent = 'Connected to: ' + connection.peer;
+  
+  // Handle incoming data
+  connection.on('data', (data) => {
+    // Update opponent car data when we receive it
+    if (data.type === 'carUpdate') {
+      opponentCarData = data;
+      updateOpponentCar();
+    }
+  });
+  
+  // Handle connection closing
+  connection.on('close', () => {
+    connection = null;
+    document.getElementById('connection-status').textContent = 'Disconnected';
+    // Hide opponent car when they disconnect
+    if (opponentCarModel) {
+      opponentCarModel.visible = false;
+    }
+  });
+}
+
+// Setup UI for connection
+function setupConnectionUI() {
+  // Copy ID button
+  document.getElementById('copy-id').addEventListener('click', () => {
+    const myId = document.getElementById('my-id').textContent;
+    navigator.clipboard.writeText(myId)
+      .then(() => {
+        alert('ID copied to clipboard!');
+      })
+      .catch(err => {
+        console.error('Failed to copy: ', err);
+      });
+  });
+  
+  // Connect button
+  document.getElementById('connect-button').addEventListener('click', () => {
+    const peerId = document.getElementById('peer-id-input').value.trim();
+    if (peerId) {
+      document.getElementById('connection-status').textContent = 'Connecting...';
+      
+      // Connect to the peer
+      const conn = peer.connect(peerId);
+      conn.on('open', () => {
+        handleConnection(conn);
+      });
+    } else {
+      alert('Please enter a valid peer ID');
+    }
+  });
+}
+
+// Load semi-transparent car model for opponent
+function loadOpponentCarModel() {
+  const loader = new GLTFLoader();
+  
+  loader.load(
+    '/models/car.glb',
+    (gltf) => {
+      opponentCarModel = gltf.scene.clone();
+      
+      // Adjust model scale and position
+      opponentCarModel.scale.set(4, 4, 4);
+      
+      // Make car semi-transparent
+      opponentCarModel.traverse((node) => {
+        if (node.isMesh) {
+          node.material = node.material.clone(); // Clone material to not affect your car
+          node.material.transparent = true;
+          node.material.opacity = 0.5;
+          node.material.depthWrite = false; // Fixes transparency issues
+          node.castShadow = false; // Optional: disable shadows for ghost car
+        }
+      });
+      
+      // Make the opponent car invisible initially
+      opponentCarModel.visible = false;
+      
+      // Add to scene
+      scene.add(opponentCarModel);
+    },
+    undefined,
+    (error) => {
+      console.error('Error loading opponent car model:', error);
+    }
+  );
+}
+
+// Update opponent car position and rotation
+function updateOpponentCar() {
+  if (!opponentCarModel) return;
+  
+  // Make the car visible when we have data
+  opponentCarModel.visible = true;
+  
+  // Update position
+  opponentCarModel.position.set(
+    opponentCarData.position.x, 
+    opponentCarData.position.y, 
+    opponentCarData.position.z
+  );
+  
+  // Update rotation
+  opponentCarModel.quaternion.set(
+    opponentCarData.quaternion.x,
+    opponentCarData.quaternion.y,
+    opponentCarData.quaternion.z,
+    opponentCarData.quaternion.w
+  );
+}
+
+// Send car position and rotation to connected peer
+function sendCarData() {
+  if (!connection || !carModel) return;
+  
+  // Prepare the data packet
+  const carData = {
+    type: 'carUpdate',
+    position: {
+      x: carModel.position.x,
+      y: carModel.position.y,
+      z: carModel.position.z
+    },
+    quaternion: {
+      x: carModel.quaternion.x,
+      y: carModel.quaternion.y,
+      z: carModel.quaternion.z,
+      w: carModel.quaternion.w
+    }
+  };
+  
+  // Send the data
+  connection.send(carData);
 }
 
 // Start initialization
