@@ -108,7 +108,21 @@ class RacingLobby {
           // Save game config to session storage
           sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
           
-          // Wait a moment for messages to be sent before navigating
+          // Close all connections to free up the ID
+          this.connections.forEach(conn => {
+            try {
+              conn.connection.close();
+            } catch (e) {
+              console.log('Error closing connection:', e);
+            }
+          });
+          
+          // Close the peer connection
+          if (this.peer) {
+            this.peer.disconnect();
+          }
+          
+          // Wait a moment for connections to close before navigating
           setTimeout(() => {
             window.location.href = 'game.html';
           }, 500);
