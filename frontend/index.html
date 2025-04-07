@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Racing - Home</title>
+  <link rel="stylesheet" href="src/lobby-style.css">
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <div class="lobby-container">
+    <header>
+      <h1>Web Racing</h1>
+      <p class="tagline">Race with your friends in real-time</p>
+    </header>
+    
+    <main>
+      <section class="host-section">
+        <h2>Host a Party</h2>
+        <div id="host-controls">
+          <button id="create-party-btn" class="primary-btn">Create Party</button>
+          <div id="host-info" class="hidden">
+            <div class="code-display">
+              <span>Party Code:</span>
+              <span id="party-code" class="code">XXXXXX</span>
+              <button id="copy-code-btn" class="icon-btn">Copy</button>
+            </div>
+            <p>Share this code with friends to let them join your party</p>
+            <div class="host-options">
+              <select id="track-select">
+                <option value="map1">Mountain Pass</option>
+                <option value="map2">Desert Circuit</option>
+                <option value="map3">City Streets</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <section class="join-section">
+        <h2>Join a Party</h2>
+        <div id="join-controls">
+          <div class="code-input">
+            <input type="text" id="join-code-input" placeholder="Enter party code" maxlength="6">
+            <button id="join-party-btn" class="primary-btn">Join</button>
+          </div>
+          <p id="join-status"></p>
+        </div>
+      </section>
+      
+      <section class="players-section">
+        <h2>Players in Party</h2>
+        <ul id="player-list">
+          <li class="no-players">No players in party yet</li>
+        </ul>
+      </section>
+    </main>
+    
+    <footer>
+      <button id="play-btn" class="primary-btn play-btn disabled">Play</button>
+    </footer>
+  </div>
+
+  <script src="src/lobby.js"></script>
+</body>
+</html>

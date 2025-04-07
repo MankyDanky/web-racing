@@ -1,0 +1,167 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: sans-serif;
+    overflow: hidden;
+}
+
+#racing-ui {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  z-index: 100;
+  pointer-events: none;
+  user-select: none;
+}
+
+#speedometer {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.gauge {
+  position: relative;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.gauge-body {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 50%;
+  background: #222;
+  border-top-left-radius: 100px;
+  border-top-right-radius: 100px;
+  overflow: hidden;
+  text-align: center;
+  transform-style: preserve-3d; /* Helps with z-index stacking */
+}
+
+.gauge-fill {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: top center; /* Changed to top center */
+  transform: rotate(0deg);
+  background: linear-gradient(to right, #30cfd0, #c43ad6);
+  transition: transform 0.1s;
+}
+
+.gauge-cover {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gauge-needle {
+  position: absolute;
+  width: 4px;
+  height: 50%;
+  background: #ff0000;
+  bottom: 0; /* Changed from -5px to 0 */
+  left: 50%;
+  margin-left: -2px;
+  transform-origin: bottom center; /* Kept the same */
+  transform: rotate(-90deg);
+  transition: transform 0.1s;
+  z-index: 10; /* Ensure needle is on top */
+}
+
+.speed-value {
+  font-family: 'Arial', sans-serif;
+  font-size: 42px;
+  font-weight: bold;
+  color: #fff;
+  margin-top: 10px;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.speed-unit {
+  font-family: 'Arial', sans-serif;
+  font-size: 14px;
+  color: #aaa;
+  text-align: center;
+}
+
+#connection-ui {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 5px;
+  color: white;
+  width: 250px;
+}
+
+.connection-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#my-id-container {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#my-id {
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#copy-id {
+  background: #4CAF50;
+  border: none;
+  color: white;
+  padding: 2px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#connect-container {
+  display: flex;
+  gap: 5px;
+}
+
+#peer-id-input {
+  flex-grow: 1;
+  padding: 5px;
+  border-radius: 3px;
+  border: none;
+}
+
+#connect-button {
+  background: #2196F3;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+#connection-status {
+  text-align: center;
+  font-style: italic;
+  font-size: 0.9em;
+}
