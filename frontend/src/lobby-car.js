@@ -24,15 +24,15 @@ class CarPreview {
     directionalLight.position.set(1, 1, 1);
     this.scene.add(directionalLight);
     
-    const pointLight = new THREE.PointLight(0xff0080, 2, 50);
+    const pointLight = new THREE.PointLight(0xffffff, 2, 50);
     pointLight.position.set(0, 10, 5);
     this.scene.add(pointLight);
     
-    // Set up camera
+    // Set up camera with adjusted position
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
-    this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-    this.camera.position.set(0, 2, 10);
+    this.camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+    this.camera.position.set(0, 3, 12); // Moved back to show bigger car
     
     // Set up renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -58,10 +58,10 @@ class CarPreview {
     loader.load('/models/car.glb', (gltf) => {
       this.car = gltf.scene;
       
-      // Position and scale the car
-      this.car.position.set(0, 0, 0);
+      // Position and scale the car - raised position and increased scale
+      this.car.position.set(0, 2, 0); // Raised position by moving Y coordinate up
       this.car.rotation.y = Math.PI;
-      this.car.scale.set(4, 4, 4);
+      this.car.scale.set(8, 8, 8); // Increased scale for better visibility
       
       // Add car to scene
       this.scene.add(this.car);
@@ -70,52 +70,7 @@ class CarPreview {
     undefined, 
     (error) => {
       console.error('Error loading car model:', error);
-      // If there's an error, create a placeholder car
-      this.createPlaceholderCar();
     });
-  }
-  
-  createPlaceholderCar() {
-    // Create a simple car shape as placeholder
-    const carGroup = new THREE.Group();
-    
-    // Car body
-    const bodyGeometry = new THREE.BoxGeometry(2, 0.75, 4);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0080 });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.position.y = 0.5;
-    carGroup.add(body);
-    
-    // Car top
-    const topGeometry = new THREE.BoxGeometry(1.5, 0.5, 2);
-    const topMaterial = new THREE.MeshStandardMaterial({ color: 0xff0080 });
-    const top = new THREE.Mesh(topGeometry, topMaterial);
-    top.position.y = 1.15;
-    top.position.z = -0.5;
-    carGroup.add(top);
-    
-    // Wheels
-    const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
-    const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-    
-    const wheels = [
-      { x: -1, y: 0.4, z: -1.2 },
-      { x: 1, y: 0.4, z: -1.2 },
-      { x: -1, y: 0.4, z: 1.2 },
-      { x: 1, y: 0.4, z: 1.2 }
-    ];
-    
-    wheels.forEach(pos => {
-      const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-      wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(pos.x, pos.y, pos.z);
-      carGroup.add(wheel);
-    });
-    
-    // Add to scene
-    this.car = carGroup;
-    this.scene.add(this.car);
-    this.isInitialized = true;
   }
   
   onWindowResize() {

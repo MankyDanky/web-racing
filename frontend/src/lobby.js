@@ -23,18 +23,23 @@ class RacingLobby {
       this.hostInfo = document.getElementById('host-info');
       this.partyCodeDisplay = document.getElementById('party-code');
       this.copyCodeBtn = document.getElementById('copy-code-btn');
-      this.playBtn = document.getElementById('host-play-btn');
+      this.hostStopBtn = document.getElementById('host-stop-btn');
+      
+      // Center elements
+      this.playerNameInput = document.getElementById('player-name-input');
+      this.playBtn = document.getElementById('play-btn');
       
       // Join elements
       this.joinCodeInput = document.getElementById('join-code-input');
       this.joinPartyBtn = document.getElementById('join-party-btn');
       this.joinStatus = document.getElementById('join-status');
+      this.joinSection = document.querySelector('.join-section');
       
       // Player list
       this.playerList = document.getElementById('player-list');
       
-      // Show code display when host creates a party
-      document.getElementById('code-display').classList.remove('hidden');
+      // Initialize player name with random name
+      this.playerNameInput.value = this.playerName;
     }
     
     initPeerJS() {
@@ -91,48 +96,56 @@ class RacingLobby {
         }
       });
       
-      // Play button
-      this.playBtn.addEventListener('click', () => {
-        if (this.playBtn.classList.contains('disabled')) return;
+      // Player name input - update player name when changed
+      this.playerNameInput.addEventListener('input', () => {
+        this.playerName = this.playerNameInput.value.trim() || `Player_${Math.floor(Math.random() * 10000)}`;
         
-        // If we're the host, notify all players to start the game
-        if (this.isHost) {
-          const gameConfig = {
-            type: 'startGame',
-            // Use hardcoded map ID instead of trackSelect.value
-            trackId: 'map1',
-            players: this.players
-          };
-          
-          this.broadcastToAll(gameConfig);
-          
-          // Save game config to session storage
-          sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
-          
-          // Close all connections to free up the ID
-          this.connections.forEach(conn => {
-            try {
-              conn.connection.close();
-            } catch (e) {
-              console.log('Error closing connection:', e);
+        // Update name in player list if we're in a party
+        if (this.players.length > 0) {
+          const currentPlayer = this.players.find(p => p.id === this.playerId);
+          if (currentPlayer) {
+            currentPlayer.name = this.playerName;
+            
+            // If host, broadcast to all players
+            if (this.isHost) {
+              this.broadcastToAll({
+                type: 'partyState',
+                players: this.players,
+                trackId: 'map1'
+              });
             }
-          });
-          
-          // Close the peer connection
-          if (this.peer) {
-            this.peer.disconnect();
           }
-          
-          // Wait a moment for connections to close before navigating
-          setTimeout(() => {
-            window.location.href = 'game.html';
-          }, 500);
+          this.updatePlayerList();
+        }
+      });
+      
+      // Stop hosting button
+      this.hostStopBtn.addEventListener('click', () => {
+        if (this.isHost) {
+          this.stopHosting();
+        }
+      });
+      
+      // Play button - works in both single and multiplayer
+      this.playBtn.addEventListener('click', () => {
+        if (this.isHost) {
+          // If host, use the multiplayer start
+          this.startMultiplayerGame();
+        } else if (this.hostId) {
+          // If in a party but not host, we can't start the game
+          alert('Only the host can start the race.');
+        } else {
+          // Not in a party - start single player game
+          this.startSinglePlayerGame();
         }
       });
     }
     
     createParty() {
       this.isHost = true;
+      
+      // Hide join section when hosting
+      this.joinSection.classList.add('hidden');
       
       // Wait for peer ID to be assigned before creating party
       if (!this.playerId) {
@@ -154,8 +167,6 @@ class RacingLobby {
     }
     
     createPartyWithPeerId() {
-      this.createPartyBtn.textContent = "Creating party...";
-      
       // Register with backend to get a short code
       fetch('http://localhost:8000/api/party-codes/create/', {
         method: 'POST',
@@ -324,6 +335,11 @@ class RacingLobby {
           sessionStorage.setItem('gameConfig', JSON.stringify(data));
           window.location.href = 'game.html';
           break;
+          
+        case 'partyEnded':
+          alert('The host has ended the party.');
+          window.location.reload(); // Reload the page to reset everything
+          break;
       }
     }
     
@@ -377,6 +393,95 @@ class RacingLobby {
           // Use hardcoded map ID
           trackId: 'map1'
         });
+      }
+    }
+    
+    startMultiplayerGame() {
+      const gameConfig = {
+        type: 'startGame',
+        trackId: 'map1',
+        players: this.players
+      };
+      
+      this.broadcastToAll(gameConfig);
+      
+      // Save game config to session storage
+      sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
+      
+      // Close all connections
+      this.connections.forEach(conn => {
+        try {
+          conn.connection.close();
+        } catch (e) {
+          console.log('Error closing connection:', e);
+        }
+      });
+      
+      // Close the peer connection
+      if (this.peer) {
+        this.peer.disconnect();
+      }
+      
+      // Navigate to game page
+      setTimeout(() => {
+        window.location.href = 'game.html';
+      }, 500);
+    }
+    
+    startSinglePlayerGame() {
+      // Create a single player game config
+      const gameConfig = {
+        type: 'startGame',
+        trackId: 'map1',
+        players: [{
+          id: this.playerId || 'solo-player',
+          name: this.playerName,
+          isHost: true
+        }],
+        isSinglePlayer: true
+      };
+      
+      // Save game config to session storage
+      sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
+      
+      // Navigate to game page
+      window.location.href = 'game.html';
+    }
+    
+    stopHosting() {
+      // Notify all connected players that the party is ending
+      this.broadcastToAll({
+        type: 'partyEnded',
+        message: 'Host has ended the party'
+      });
+      
+      // Close all connections
+      this.connections.forEach(conn => {
+        try {
+          conn.connection.close();
+        } catch (e) {
+          console.log('Error closing connection:', e);
+        }
+      });
+      
+      // Reset party state
+      this.connections = [];
+      this.players = [];
+      this.isHost = false;
+      
+      // Reset UI
+      this.hostInfo.classList.add('hidden');
+      this.createPartyBtn.classList.remove('hidden');
+      this.createPartyBtn.disabled = false;
+      this.joinSection.classList.remove('hidden');
+      
+      // Update player list to show no players
+      this.updatePlayerList();
+      
+      // Disconnect and reinitialize peer connection
+      if (this.peer) {
+        this.peer.disconnect();
+        this.initPeerJS();
       }
     }
   }

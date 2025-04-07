@@ -28,6 +28,16 @@
             <button id="create-party-btn" class="game-btn create-btn">CREATE PARTY</button>
             
             <div id="host-info" class="hidden">
+              <!-- Party Code Display -->
+              <div class="code-display">
+                <h3>PARTY CODE</h3>
+                <div class="code-box">
+                  <span id="party-code" class="code">XXXXXX</span>
+                  <button id="copy-code-btn" class="icon-btn">COPY</button>
+                </div>
+                <p class="code-instructions">Share this code with friends</p>
+              </div>
+
               <div class="game-info">
                 <h3>RACE DETAILS</h3>
                 <div class="info-container">
@@ -36,42 +46,29 @@
                 </div>
               </div>
               
-              <!-- Host's Play Button -->
-              <button id="host-play-btn" class="game-btn play-btn">START RACE</button>
+              <!-- Host's Stop Hosting Button -->
+              <button id="host-stop-btn" class="game-btn stop-btn">STOP HOSTING</button>
             </div>
           </div>
         </div>
       </section>
       
-      <!-- Center - Car Preview and Join Code -->
+      <!-- Center - Car Preview -->
       <section class="center-panel">
         <!-- 3D Car Model -->
         <div id="car-model-container"></div>
         
-        <!-- Party Code Display/Input -->
-        <div class="party-code-container">
-          <div id="code-display" class="hidden">
-            <div class="code-display">
-              <h3>PARTY CODE</h3>
-              <div class="code-box">
-                <span id="party-code" class="code">XXXXXX</span>
-                <button id="copy-code-btn" class="icon-btn">COPY</button>
-              </div>
-              <p class="code-instructions">Share this code with friends</p>
-            </div>
-          </div>
-          
-          <div id="code-input">
-            <div class="code-input">
-              <input type="text" id="join-code-input" placeholder="ENTER PARTY CODE" maxlength="6">
-              <button id="join-party-btn" class="game-btn join-btn">JOIN</button>
-            </div>
-            <p id="join-status" class="status-message"></p>
-          </div>
+        <!-- Player Name Input -->
+        <div class="player-name-container">
+          <h3>YOUR NAME</h3>
+          <input type="text" id="player-name-input" placeholder="Enter your name" maxlength="15">
         </div>
+        
+        <!-- Always-visible Play Button -->
+        <button id="play-btn" class="game-btn play-btn">PLAY GAME</button>
       </section>
       
-      <!-- Right Side - Players List -->
+      <!-- Right Side - Players List and Join -->
       <section class="game-panel right-panel">
         <div class="panel-content">
           <h2 class="panel-title">RACERS</h2>
@@ -79,6 +76,18 @@
             <ul id="player-list" class="player-list">
               <li class="no-players">No racers have joined yet</li>
             </ul>
+          </div>
+          
+          <!-- Join Lobby Section -->
+          <div class="join-section">
+            <h3>JOIN RACE</h3>
+            <div id="code-input">
+              <div class="code-input">
+                <input type="text" id="join-code-input" placeholder="ENTER PARTY CODE" maxlength="6">
+                <button id="join-party-btn" class="game-btn join-btn">JOIN</button>
+              </div>
+              <p id="join-status" class="status-message"></p>
+            </div>
           </div>
         </div>
       </section>
