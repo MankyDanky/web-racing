@@ -126,16 +126,23 @@ class RacingLobby {
         }
       });
       
-      // Play button - works in both single and multiplayer
+      // Play button - simplify logic to ensure multiplayer when hosting
       this.playBtn.addEventListener('click', () => {
+        // If player has entered a name, use it
+        if (this.playerNameInput.value.trim()) {
+          this.playerName = this.playerNameInput.value.trim();
+        }
+        
         if (this.isHost) {
-          // If host, use the multiplayer start
+          // Host always starts a multiplayer game
+          console.log("Starting multiplayer game as host");
           this.startMultiplayerGame();
         } else if (this.hostId) {
-          // If in a party but not host, we can't start the game
-          alert('Only the host can start the race.');
+          // If in a party but not host, show friendly message
+          alert('Only the host can start the race. Wait for the host to begin!');
         } else {
           // Not in a party - start single player game
+          console.log("Starting single player game");
           this.startSinglePlayerGame();
         }
       });
@@ -344,8 +351,10 @@ class RacingLobby {
     }
     
     broadcastToAll(message, excludePeerId = null) {
+      console.log('Broadcasting message:', message);
       this.connections.forEach(conn => {
         if (conn.peerId !== excludePeerId) {
+          console.log('Broadcasting message to:', conn.peerId);
           conn.connection.send(message);
         }
       });
@@ -397,35 +406,53 @@ class RacingLobby {
     }
     
     startMultiplayerGame() {
+      console.log("Creating multiplayer game with players:", this.players);
+      
+      // Ensure there's at least the host in the players list
+      if (this.players.length === 0) {
+        this.players = [{
+          id: this.playerId,
+          name: this.playerName,
+          isHost: true
+        }];
+      }
+      
       const gameConfig = {
         type: 'startGame',
         trackId: 'map1',
-        players: this.players
+        players: this.players,
+        multiplayer: true
       };
       
-      this.broadcastToAll(gameConfig);
+      // Broadcast to all connected players
+      this.broadcastToAll({
+        type: 'startGame',
+        trackId: 'map1',
+        players: this.players,
+        multiplayer: true
+      });
       
       // Save game config to session storage
       sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
-      
-      // Close all connections
-      this.connections.forEach(conn => {
-        try {
-          conn.connection.close();
-        } catch (e) {
-          console.log('Error closing connection:', e);
-        }
-      });
-      
-      // Close the peer connection
-      if (this.peer) {
-        this.peer.disconnect();
-      }
+      console.log("Game config saved:", gameConfig);
       
       // Navigate to game page
+      console.log("Navigating to game.html");
       setTimeout(() => {
+        // Close all connections after notifying other players
+        this.connections.forEach(conn => {
+          try {
+            conn.connection.close();
+          } catch (e) {
+            console.log('Error closing connection:', e);
+          }
+        });
+        // Close the peer connection
+        if (this.peer) {
+          this.peer.disconnect();
+        }
         window.location.href = 'game.html';
-      }, 500);
+      }, 200);
     }
     
     startSinglePlayerGame() {
