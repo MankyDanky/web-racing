@@ -55,11 +55,11 @@ const WHEEL_X_OFFSET = 0.8;
 const WHEEL_Z_OFFSET = 1.5;
 
 // Physics tuning parameters
-const SUSPENSION_STIFFNESS = 60;
-const SUSPENSION_DAMPING = 12;
-const SUSPENSION_COMPRESSION = 12;
+const SUSPENSION_STIFFNESS = 30;
+const SUSPENSION_DAMPING = 4.5;
+const SUSPENSION_COMPRESSION = 4.5;
 const ROLL_INFLUENCE = 0.05;
-const WHEEL_FRICTION = 1500;
+const WHEEL_FRICTION = 150;
 
 // Control state
 const keyState = {
@@ -1084,7 +1084,7 @@ function addTrackCollider(trackModel, ammo) {
 // Modify animate function to use our camera system instead of OrbitControls
 function animate() {
   requestAnimationFrame(animate);
-  const deltaTime = Math.min(clock.getDelta(), 0.1);
+  const deltaTime = Math.min(clock.getDelta(), 0.05);
   
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
@@ -1420,9 +1420,9 @@ function loadOpponentCarModel(playerId) {
       
       // Create text sprite for player name
       const nameSprite = createTextSprite(playerName);
-      nameSprite.position.y = 0.3; // Position higher above car (was 0.3)
-      nameSprite.scale.set(1, 0.25, 1); // Larger scale (was 1, 0.25, 1)
-      opponentModel.add(nameSprite); // Add as child of car model
+      nameSprite.position.y = 0.3; 
+      nameSprite.scale.set(1, 0.25, 1);
+      opponentModel.add(nameSprite); 
       
       console.log(`Added name label for player: ${playerName} (Car color: ${playerColor})`);
       

@@ -133,6 +133,7 @@ body {
   box-shadow: 0 8px 0 #7a003c, 0 10px 20px rgba(0, 0, 0, 0.5);
   transition: all 0.2s ease;
   letter-spacing: 1px;
+  margin-bottom: 10px;
 }
 
 #host-start-btn:hover, #play-btn:hover {
@@ -413,7 +414,7 @@ input:focus {
 /* Car Color Carousel */
 .color-carousel {
   text-align: center;
-  margin: 20px 0;
+  margin: 00px 0;
 }
 
 .color-carousel h3 {

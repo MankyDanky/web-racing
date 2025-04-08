@@ -114,6 +114,14 @@ class RacingLobby {
                 players: this.players,
                 trackId: 'map1'
               });
+            } else if (this.hostId) {
+              // If guest, send update to host
+              this.sendToHost({
+                type: 'playerUpdate',
+                playerId: this.playerId,
+                playerName: this.playerName,
+                playerColor: sessionStorage.getItem('carColor') || 'red'
+              });
             }
           }
           this.updatePlayerList();
@@ -305,7 +313,8 @@ class RacingLobby {
             const newPlayer = {
               id: data.playerId,
               name: data.playerName,
-              isHost: false
+              isHost: false,
+              playerColor: data.playerColor || 'red' // Save the player's color
             };
             
             this.players.push(newPlayer);
@@ -348,6 +357,28 @@ class RacingLobby {
         case 'partyEnded':
           alert('The host has ended the party.');
           window.location.reload(); // Reload the page to reset everything
+          break;
+
+        case 'playerUpdate':
+          if (this.isHost) {
+            // Find the player in the list
+            const playerIndex = this.players.findIndex(p => p.id === data.playerId);
+            if (playerIndex !== -1) {
+              // Update player info
+              this.players[playerIndex].name = data.playerName;
+              this.players[playerIndex].playerColor = data.playerColor;
+              
+              // Update UI
+              this.updatePlayerList();
+              
+              // Broadcast the updated player list to all players
+              this.broadcastToAll({
+                type: 'partyState',
+                players: this.players,
+                trackId: 'map1'
+              });
+            }
+          }
           break;
       }
     }
@@ -415,8 +446,15 @@ class RacingLobby {
         this.players = [{
           id: this.playerId,
           name: this.playerName,
-          isHost: true
+          isHost: true,
+          playerColor: sessionStorage.getItem('carColor') || 'red'
         }];
+      } else {
+        // Update the host's color in the players array
+        const hostIndex = this.players.findIndex(p => p.id === this.playerId);
+        if (hostIndex !== -1) {
+          this.players[hostIndex].playerColor = sessionStorage.getItem('carColor') || 'red';
+        }
       }
       
       const gameConfig = {
@@ -517,9 +555,59 @@ class RacingLobby {
     initCarColorCarousel() {
       const colorOptions = document.querySelectorAll('.color-option');
       
-      // Set initial car color in session storage
-      const initialColor = colorOptions[0].getAttribute('data-color');
-      sessionStorage.setItem('carColor', initialColor);
+      // Get the stored color (if any)
+      const storedColor = sessionStorage.getItem('carColor') || 'red';
+      let foundStoredColor = false;
+      
+      // Update UI to match stored color
+      colorOptions.forEach(option => {
+        const optionColor = option.getAttribute('data-color');
+        
+        // If this is the stored color, mark it as active
+        if (optionColor === storedColor) {
+          // Remove active class from all options first
+          colorOptions.forEach(opt => opt.classList.remove('active'));
+          
+          // Add active class to this option
+          option.classList.add('active');
+          foundStoredColor = true;
+        }
+        
+        // Add click event listener
+        option.addEventListener('click', () => {
+          // Remove active class from all options
+          colorOptions.forEach(opt => opt.classList.remove('active'));
+          
+          // Add active class to clicked option
+          option.classList.add('active');
+          
+          // Get selected color name
+          const color = option.getAttribute('data-color');
+          
+          // Store selected color in session storage
+          sessionStorage.setItem('carColor', color);
+          
+          // If we're in a party as a guest, notify the host
+          if (this.hostId && !this.isHost) {
+            this.sendToHost({
+              type: 'playerUpdate',
+              playerId: this.playerId,
+              playerName: this.playerName,
+              playerColor: color
+            });
+          }
+        });
+      });
+      
+      // If stored color wasn't found in options, default to red
+      if (!foundStoredColor) {
+        sessionStorage.setItem('carColor', 'red');
+        colorOptions[0].classList.add('active');
+      }
+    }
+
+    setupColorChangeListener() {
+      const colorOptions = document.querySelectorAll('.color-option');
       
       colorOptions.forEach(option => {
         option.addEventListener('click', () => {
@@ -529,13 +617,33 @@ class RacingLobby {
           // Add active class to clicked option
           option.classList.add('active');
           
-          // Get selected color name (not hex value)
+          // Get selected color name
           const color = option.getAttribute('data-color');
           
           // Store selected color in session storage
           sessionStorage.setItem('carColor', color);
+          
+          // If we're in a party as a guest, notify the host
+          if (this.hostId && !this.isHost) {
+            this.sendToHost({
+              type: 'playerUpdate',
+              playerId: this.playerId,
+              playerName: this.playerName,
+              playerColor: color
+            });
+          }
         });
       });
+    }
+
+    sendToHost(message) {
+      const hostConnection = this.connections.find(conn => conn.peerId === this.hostId);
+      if (hostConnection && hostConnection.connection) {
+        console.log('Sending update to host:', message);
+        hostConnection.connection.send(message);
+      } else {
+        console.error('No host connection found');
+      }
     }
   }
   

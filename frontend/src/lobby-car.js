@@ -7,6 +7,8 @@ class CarPreview {
     this.car = null;
     this.isInitialized = false;
     this.currentColor = sessionStorage.getItem('carColor') || 'red';
+    this.carRotation = 0;
+    this.carRotationSpeed = 0.01;
 
     this.init();
     this.setupColorChangeListener();
@@ -68,7 +70,7 @@ class CarPreview {
       
       // Position and scale the car
       this.car.position.set(0, 2, 0);
-      this.car.rotation.y = Math.PI;
+      this.car.rotation.y = this.carRotation;
       this.car.scale.set(8, 8, 8);
       
       // Add car to scene
@@ -127,7 +129,8 @@ class CarPreview {
     
     if (this.car && this.isInitialized) {
       // Rotate the car slowly
-      this.car.rotation.y += 0.01;
+      this.carRotation += this.carRotationSpeed;
+      this.car.rotation.y = this.carRotation;
     }
     
     if (this.renderer && this.scene && this.camera) {
