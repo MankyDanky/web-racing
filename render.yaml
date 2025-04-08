@@ -2,15 +2,16 @@ services:
   - type: web
     name: webracing-backend
     env: python
+    rootDir: backend  # This tells Render to look in the backend directory
     buildCommand: "./build.sh"
-    startCommand: "gunicorn your_project_name.wsgi:application --bind 0.0.0.0:$PORT"
+    startCommand: "gunicorn webracing_backend.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
       - key: ALLOWED_HOSTS
-        value: ".onrender.com,your-custom-domain.com"
+        value: ".onrender.com"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://your-frontend-url.com"
       - key: DATABASE_URL
