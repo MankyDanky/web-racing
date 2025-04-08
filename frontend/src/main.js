@@ -977,15 +977,13 @@ function animate() {
   if (physicsWorld) {
     updatePhysics(deltaTime, window.Ammo);
     updateCamera(); // Add this line to update the camera each frame
+    updateMarkers(); // Add this to update player markers
     
     // Send car data every few frames to reduce bandwidth
     if (Math.random() < 0.2) { // ~20% chance each frame, or about 12 updates per second
       sendCarData();
     }
   }
-  
-  // Remove the controls.update() line since we're using our own camera system
-  // controls.update();  <-- Remove or comment this line
   
   renderer.render(scene, camera);
 }
@@ -1271,9 +1269,18 @@ function loadOpponentCarModels() {
   });
 }
 
-// Modified to create an opponent car for a specific player
+// Replace the marker sphere with a player name text sprite
 function loadOpponentCarModel(playerId) {
   const loader = new GLTFLoader();
+  
+  // Find player name from gameConfig
+  let playerName = 'Player';
+  if (gameConfig && gameConfig.players) {
+    const playerInfo = gameConfig.players.find(p => p.id === playerId);
+    if (playerInfo) {
+      playerName = playerInfo.name || 'Player';
+    }
+  }
   
   loader.load(
     '/models/car.glb',
@@ -1282,6 +1289,7 @@ function loadOpponentCarModel(playerId) {
       
       // Adjust model scale and position
       opponentModel.scale.set(4, 4, 4);
+      opponentModel.position.set(0, 2, 0);
       
       // Make car semi-transparent
       opponentModel.traverse((node) => {
@@ -1294,15 +1302,25 @@ function loadOpponentCarModel(playerId) {
         }
       });
       
+      // Create text sprite for player name
+      const nameSprite = createTextSprite(playerName);
+      nameSprite.position.y = 0.3; // Position above car
+      nameSprite.scale.set(1, 0.25, 1); // Adjust size as needed
+      opponentModel.add(nameSprite); // Add as child of car model
+      
+      console.log(`Added name label for player: ${playerName}`);
+      
       // Make invisible initially
       opponentModel.visible = false;
       
       // Add to scene
       scene.add(opponentModel);
       
-      // Store in our opponent cars collection
+      // Store in opponent cars collection
       opponentCars[playerId] = {
         model: opponentModel,
+        nameLabel: nameSprite,
+        name: playerName,
         lastUpdate: Date.now()
       };
     },
@@ -1311,6 +1329,47 @@ function loadOpponentCarModel(playerId) {
       console.error('Error loading opponent car model:', error);
     }
   );
+}
+
+// Function to create a text sprite
+function createTextSprite(text) {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  canvas.width = 256;
+  canvas.height = 64;
+  
+  // Clear canvas
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Text style
+  context.font = 'bold 32px Arial';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  
+  // Draw text outline
+  context.strokeStyle = 'black';
+  context.lineWidth = 4;
+  context.strokeText(text, canvas.width / 2, canvas.height / 2);
+  
+  // Draw text fill
+  context.fillStyle = 'white';
+  context.fillText(text, canvas.width / 2, canvas.height / 2);
+  
+  // Create texture from canvas
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  
+  // Create sprite material
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true
+  });
+  
+  // Create sprite
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(6, 1.5, 1); // Adjust size as needed
+  
+  return sprite;
 }
 
 // Update a specific opponent's car position
@@ -1342,6 +1401,19 @@ function updateOpponentCarPosition(playerId, data) {
     data.quaternion.z,
     data.quaternion.w
   );
+}
+
+// Update the updateMarkers function to handle text labels
+function updateMarkers() {
+  // Loop through all opponent cars and ensure name labels are visible
+  Object.values(opponentCars).forEach(opponent => {
+    if (opponent.model && opponent.model.visible && opponent.nameLabel) {
+      // Make name label visible
+      opponent.nameLabel.visible = true;
+      
+      // Make sure the text always faces the camera (this happens automatically with sprites)
+    }
+  });
 }
 
 function sendCarData() {

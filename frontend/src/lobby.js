@@ -175,7 +175,7 @@ class RacingLobby {
     
     createPartyWithPeerId() {
       // Register with backend to get a short code
-      fetch('http://localhost:8000/api/party-codes/create/', {
+      fetch('https://mankydanky.pythonanywhere.com/api/party-codes/create/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -224,7 +224,7 @@ class RacingLobby {
       this.joinStatus.textContent = 'Looking up party...';
       
       // Look up the peer ID from the short code
-      fetch(`http://localhost:8000/api/party-codes/lookup/${code}/`)
+      fetch(`https://mankydanky.pythonanywhere.com/api/party-codes/lookup/${code}/`)
         .then(response => {
           if (!response.ok) {
             throw new Error('Party not found');
