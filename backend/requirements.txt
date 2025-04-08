@@ -4,3 +4,6 @@ django-cors-headers==4.7.0
 djangorestframework==3.16.0
 sqlparse==0.5.3
 typing_extensions==4.13.1
+gunicorn==21.2.0
+whitenoise==6.6.0
+dj-database-url==2.1.0
