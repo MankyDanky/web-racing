@@ -2,7 +2,7 @@ services:
   - type: web
     name: webracing-backend
     env: python
-    rootDir: backend  # This tells Render to look in the backend directory
+    rootDir: backend
     buildCommand: "./build.sh"
     startCommand: "gunicorn webracing_backend.wsgi:application --bind 0.0.0.0:$PORT"
     envVars:
