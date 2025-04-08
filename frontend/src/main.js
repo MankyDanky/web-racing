@@ -271,8 +271,38 @@ function createVehicle(ammo) {
 function loadCarModel(ammo, wheelPositions) {
   const loader = new GLTFLoader();
   
+  // Get the player ID
+  const myPlayerId = localStorage.getItem('myPlayerId');
+  
+  // Determine car color with proper priority:
+  // 1. From gameConfig if in multiplayer mode
+  // 2. From sessionStorage if available
+  // 3. Default to red
+  let carColor = 'red';
+  
+  // Try getting from gameConfig first in multiplayer mode
+  if (gameConfig && gameConfig.players) {
+    const playerInfo = gameConfig.players.find(p => p.id === myPlayerId);
+    if (playerInfo && playerInfo.playerColor) {
+      carColor = playerInfo.playerColor;
+      console.log(`Using car color from gameConfig: ${carColor}`);
+    }
+  }
+  
+  // Fall back to sessionStorage if not found in gameConfig
+  if (carColor === 'red') {
+    const storedColor = sessionStorage.getItem('carColor');
+    if (storedColor) {
+      carColor = storedColor;
+      console.log(`Using car color from sessionStorage: ${carColor}`);
+    } else {
+      console.log('Using default red color');
+    }
+  }
+  
+  // Load the appropriate colored car model
   loader.load(
-    '/models/car.glb',
+    `/models/car_${carColor}.glb`,
     (gltf) => {
       carModel = gltf.scene;
       
@@ -346,11 +376,93 @@ function loadCarModel(ammo, wheelPositions) {
       
       console.log('Car model loaded successfully');
     },
-    (xhr) => {
-      console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-    },
+    undefined,
     (error) => {
-      console.error('Error loading car model:', error);
+      console.error(`Error loading ${carColor} car model:`, error);
+      // Fallback to red model if the requested color fails to load
+      if (carColor !== 'red') {
+        console.log('Falling back to red car model');
+        loader.load(
+          '/models/car_red.glb',
+          (gltf) => {
+            carModel = gltf.scene;
+            
+            // Adjust model scale and position if needed
+            carModel.scale.set(4, 4, 4); // Adjust scale as needed
+            carModel.position.set(0, 0, 0); // Position will be updated by physics
+            
+            // Make sure car casts shadows
+            carModel.traverse((node) => {
+              if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = false;
+              }
+            });
+            
+            // Find wheel meshes in the car model
+            let wheelMeshFL = carModel.getObjectByName('wheel-fr');
+            let wheelMeshFR = carModel.getObjectByName('wheel-fl');
+            let wheelMeshBL = carModel.getObjectByName('wheel-br');
+            let wheelMeshBR = carModel.getObjectByName('wheel-bl');
+
+            
+            const wheelModelMeshes = [wheelMeshFL, wheelMeshFR, wheelMeshBL, wheelMeshBR];
+            
+            // Store reference to wheel meshes and detach them from car model
+            for (let i = 0; i < wheelModelMeshes.length; i++) {
+              if (wheelModelMeshes[i]) {
+                // Get the original world matrix before removal to preserve transformations
+                wheelModelMeshes[i].updateMatrixWorld(true);
+                
+                // Remove from car model
+                carModel.remove(wheelModelMeshes[i]);
+                
+                // Add directly to scene so we can control it separately
+                scene.add(wheelModelMeshes[i]);
+                
+                // Apply the same scale as the car model
+                wheelModelMeshes[i].scale.set(4, 4, 4);
+                
+                // Save reference
+                wheelMeshes[i] = wheelModelMeshes[i];
+                
+                console.log(`Found and set up wheel: ${wheelPositions[i].name}`);
+              } else {
+                console.warn(`Could not find wheel mesh: ${wheelPositions[i].name}`);
+                
+                // Create a default wheel as fallback
+                const wheelGeometry = new THREE.CylinderGeometry(
+                  WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 24
+                );
+                wheelGeometry.rotateZ(Math.PI/2); // Align with X axis
+                
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+                const wheelMesh = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheelMesh.castShadow = true;
+                scene.add(wheelMesh);
+                
+                // Scale the default wheel to match too
+                wheelMesh.scale.set(4, 4, 4);
+                
+                // Use this default wheel
+                wheelMeshes[i] = wheelMesh;
+              }
+            }
+            
+            // Add car model to scene
+            scene.add(carModel);
+                  
+            // Store reference to update visual position
+            rigidBodies.push({ mesh: carModel, body: carBody });
+            
+            console.log('Car model loaded successfully');
+          },
+          undefined,
+          (error) => {
+            console.error('Error loading fallback red car model:', error);
+          }
+        );
+      }
     }
   );
 }
@@ -1269,21 +1381,25 @@ function loadOpponentCarModels() {
   });
 }
 
-// Replace the marker sphere with a player name text sprite
+// Update loadOpponentCarModel to use colored car models
 function loadOpponentCarModel(playerId) {
   const loader = new GLTFLoader();
   
-  // Find player name from gameConfig
+  // Find player info from gameConfig
   let playerName = 'Player';
+  let playerColor = 'red'; // Default color
+  
   if (gameConfig && gameConfig.players) {
     const playerInfo = gameConfig.players.find(p => p.id === playerId);
     if (playerInfo) {
       playerName = playerInfo.name || 'Player';
+      playerColor = playerInfo.playerColor || 'red';
     }
   }
   
+  // Load the appropriate colored car model
   loader.load(
-    '/models/car.glb',
+    `/models/car_${playerColor}.glb`,
     (gltf) => {
       const opponentModel = gltf.scene.clone();
       
@@ -1304,11 +1420,11 @@ function loadOpponentCarModel(playerId) {
       
       // Create text sprite for player name
       const nameSprite = createTextSprite(playerName);
-      nameSprite.position.y = 0.3; // Position above car
-      nameSprite.scale.set(1, 0.25, 1); // Adjust size as needed
+      nameSprite.position.y = 0.3; // Position higher above car (was 0.3)
+      nameSprite.scale.set(1, 0.25, 1); // Larger scale (was 1, 0.25, 1)
       opponentModel.add(nameSprite); // Add as child of car model
       
-      console.log(`Added name label for player: ${playerName}`);
+      console.log(`Added name label for player: ${playerName} (Car color: ${playerColor})`);
       
       // Make invisible initially
       opponentModel.visible = false;
@@ -1321,12 +1437,21 @@ function loadOpponentCarModel(playerId) {
         model: opponentModel,
         nameLabel: nameSprite,
         name: playerName,
+        color: playerColor,
         lastUpdate: Date.now()
       };
     },
     undefined,
     (error) => {
-      console.error('Error loading opponent car model:', error);
+      console.error(`Error loading ${playerColor} opponent car model:`, error);
+      // Fallback to red model if the requested color fails to load
+      if (playerColor !== 'red') {
+        console.log('Falling back to red opponent car model');
+        loader.load(
+          '/models/car_red.glb',
+          // Same handlers as above...
+        );
+      }
     }
   );
 }

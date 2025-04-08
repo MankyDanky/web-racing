@@ -410,6 +410,44 @@ input:focus {
   text-shadow: 0 1px 0 #000;
 }
 
+/* Car Color Carousel */
+.color-carousel {
+  text-align: center;
+  margin: 20px 0;
+}
+
+.color-carousel h3 {
+  font-family: 'Exo 2', sans-serif;
+  color: #4dc9ff;
+  margin-bottom: 10px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.color-options {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.color-option {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+}
+
+.color-option.active {
+  border: 2px solid white;
+  box-shadow: 0 0 10px rgba(77, 201, 255, 0.8);
+}
+
 /* Utilities */
 .hidden {
   display: none !important;

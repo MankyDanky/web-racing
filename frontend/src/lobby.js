@@ -12,6 +12,7 @@ class RacingLobby {
       // Initialize UI elements
       this.initUIElements();
       this.attachEventListeners();
+      this.initCarColorCarousel(); // Add this line
       
       // Initialize PeerJS
       this.initPeerJS();
@@ -241,11 +242,12 @@ class RacingLobby {
           conn.on('open', () => {
             this.hostId = hostPeerId;
             
-            // Send player info to host
+            // Send player info to host with color
             conn.send({
               type: 'joinRequest',
               playerId: this.playerId,
-              playerName: this.playerName
+              playerName: this.playerName,
+              playerColor: sessionStorage.getItem('carColor') || 'red'
             });
             
             // Store the connection
@@ -510,6 +512,30 @@ class RacingLobby {
         this.peer.disconnect();
         this.initPeerJS();
       }
+    }
+
+    initCarColorCarousel() {
+      const colorOptions = document.querySelectorAll('.color-option');
+      
+      // Set initial car color in session storage
+      const initialColor = colorOptions[0].getAttribute('data-color');
+      sessionStorage.setItem('carColor', initialColor);
+      
+      colorOptions.forEach(option => {
+        option.addEventListener('click', () => {
+          // Remove active class from all options
+          colorOptions.forEach(opt => opt.classList.remove('active'));
+          
+          // Add active class to clicked option
+          option.classList.add('active');
+          
+          // Get selected color name (not hex value)
+          const color = option.getAttribute('data-color');
+          
+          // Store selected color in session storage
+          sessionStorage.setItem('carColor', color);
+        });
+      });
     }
   }
   

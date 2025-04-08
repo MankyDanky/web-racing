@@ -6,8 +6,10 @@ class CarPreview {
     this.renderer = null;
     this.car = null;
     this.isInitialized = false;
+    this.currentColor = sessionStorage.getItem('carColor') || 'red';
 
     this.init();
+    this.setupColorChangeListener();
   }
 
   init() {
@@ -41,8 +43,8 @@ class CarPreview {
     this.renderer.shadowMap.enabled = true;
     this.container.appendChild(this.renderer.domElement);
     
-    // Load car model
-    this.loadCarModel();
+    // Load car model with current color
+    this.loadCarModel(this.currentColor);
     
     // Add resize listener
     window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -51,25 +53,61 @@ class CarPreview {
     this.animate();
   }
   
-  loadCarModel() {
+  loadCarModel(color = 'red') {
     const loader = new THREE.GLTFLoader();
     
-    // Try to load the car model from your game
-    loader.load('/models/car.glb', (gltf) => {
+    // Remove existing car if there is one
+    if (this.car) {
+      this.scene.remove(this.car);
+      this.car = null;
+    }
+    
+    // Load the colored car model
+    loader.load(`/models/car_${color}.glb`, (gltf) => {
       this.car = gltf.scene;
       
-      // Position and scale the car - raised position and increased scale
-      this.car.position.set(0, 2, 0); // Raised position by moving Y coordinate up
+      // Position and scale the car
+      this.car.position.set(0, 2, 0);
       this.car.rotation.y = Math.PI;
-      this.car.scale.set(8, 8, 8); // Increased scale for better visibility
+      this.car.scale.set(8, 8, 8);
       
       // Add car to scene
       this.scene.add(this.car);
       this.isInitialized = true;
+      
+      console.log(`Loaded lobby preview car: ${color}`);
     }, 
     undefined, 
     (error) => {
-      console.error('Error loading car model:', error);
+      console.error(`Error loading car_${color}.glb:`, error);
+      
+      // If color-specific model fails to load, fall back to red
+      if (color !== 'red') {
+        console.log('Falling back to red car model');
+        this.loadCarModel('red');
+      }
+    });
+  }
+  
+  // Listen for color changes from the carousel
+  setupColorChangeListener() {
+    const colorOptions = document.querySelectorAll('.color-option');
+    
+    if (!colorOptions.length) {
+      console.warn('No color options found in the DOM');
+      return;
+    }
+    
+    colorOptions.forEach(option => {
+      option.addEventListener('click', () => {
+        const newColor = option.getAttribute('data-color');
+        
+        if (newColor && newColor !== this.currentColor) {
+          console.log(`Changing car preview color to: ${newColor}`);
+          this.currentColor = newColor;
+          this.loadCarModel(newColor);
+        }
+      });
     });
   }
   
