@@ -38,10 +38,16 @@ export function initMultiplayer(gameState) {
     initPeerConnection(gameState);
   }
   
+  // Add these two lines to attach methods to the state object
+  state.checkAllPlayersConnected = checkAllPlayersConnected;
+  state.broadcastRaceStart = broadcastRaceStart;
+  state.broadcastCountdownStart = broadcastCountdownStart; // Add this line
+  
   return state;
 }
 
-// Initialize peer connection
+// Fix how connections are established and message handlers are attached
+
 function initPeerConnection(gameState) {
   // Get the player ID that was stored during lobby creation
   const myPlayerId = localStorage.getItem('myPlayerId');
@@ -56,7 +62,6 @@ function initPeerConnection(gameState) {
     console.log('Initializing peer connection with game config', state.gameConfig);
     
     // Create a new peer with the ORIGINAL ID, but with a slight delay
-    // to ensure any previous connections are fully closed
     setTimeout(() => {
       state.peer = new Peer(myPlayerId);
       
@@ -69,8 +74,13 @@ function initPeerConnection(gameState) {
           // Host waits for connections from players
           state.peer.on('connection', (conn) => {
             console.log('Player connected:', conn.peer);
-            state.playerConnections.push(conn);
-            handlePlayerConnection(conn, gameState);
+            
+            // CRITICAL FIX: Wait for connection to be fully ready
+            conn.on('open', () => {
+              console.log('Connection to player fully established:', conn.peer);
+              state.playerConnections.push(conn);
+              setupMessageHandlers(conn, gameState);
+            });
           });
           
           // Load opponent car models
@@ -90,7 +100,7 @@ function initPeerConnection(gameState) {
             conn.on('open', () => {
               console.log('Connected to host!');
               state.playerConnections.push(conn);
-              handlePlayerConnection(conn, gameState);
+              setupMessageHandlers(conn, gameState);
               loadOpponentCarModels(gameState.scene);
             });
             
@@ -117,15 +127,96 @@ function initPeerConnection(gameState) {
   }
 }
 
+// Move the message handling to a separate function with extra debugging
+function setupMessageHandlers(conn, gameState) {
+  console.log('Setting up message handlers for connection:', conn.peer);
+  
+  // Test message send and receive
+  if (!state.isHost) {
+    // If client, send a test message to host
+    try {
+      conn.send({
+        type: 'connectionTest',
+        message: 'Hello from client!',
+        timestamp: Date.now()
+      });
+      console.log('Test message sent to host');
+    } catch (e) {
+      console.error('Failed to send test message:', e);
+    }
+  }
+  
+  // Handle incoming data with enhanced logging
+  conn.on('data', (data) => {
+    try {
+      console.log(`MESSAGE RECEIVED from ${conn.peer}:`, data);
+      
+      if (data.type === 'connectionTest') {
+        console.log('Connection test message received!');
+        // Send acknowledgment
+        conn.send({
+          type: 'connectionTestAck',
+          message: 'Test received!',
+          timestamp: Date.now()
+        });
+      } else if (data.type === 'carUpdate') {
+        // Update the appropriate opponent car
+        updateOpponentCarPosition(conn.peer, data);
+      } else if (data.type === 'countdownStart') {
+        console.log("🚦 COUNTDOWN START RECEIVED - starting countdown! 🚦");
+        // Start countdown for all players simultaneously
+        if (window.startCountdown) {
+          window.startCountdown();
+        } else {
+          console.error('window.startCountdown not available!');
+        }
+      } else if (data.type === 'raceStart') {
+        console.log("RACE START RECEIVED - force starting race!");
+        // Force race to start if countdown was started but race hasn't started yet
+        window.raceState.raceStarted = true;
+      }
+    } catch (err) {
+      console.error('Error processing message:', err);
+    }
+  });
+  
+  // Client data relay handling for host
+  if (state.isHost) {
+    console.log("Setting up host message relay for player:", conn.peer);
+  }
+  
+  // Handle connection closing
+  conn.on('close', () => {
+    console.log('Connection closed:', conn.peer);
+    state.playerConnections = state.playerConnections.filter(c => c.peer !== conn.peer);
+  });
+  
+  // Handle connection errors
+  conn.on('error', (err) => {
+    console.error('Connection error with', conn.peer, ':', err);
+  });
+}
+
 // Improved player connection handler
 function handlePlayerConnection(conn, gameState) {
-  console.log('Handling player connection:', conn.peer);
-  
   // Handle incoming data from any player
   conn.on('data', (data) => {
+    console.log('Received data from player:', conn.peer, data);
     if (data.type === 'carUpdate') {
       // Update the appropriate opponent car
       updateOpponentCarPosition(conn.peer, data);
+    } else if (data.type === 'countdownStart') {
+        console.log("Received countdown start from player:", conn.peer);
+      // Start countdown for all players simultaneously
+      if (window.startCountdown) {
+        window.startCountdown();
+      }
+    } else if (data.type === 'raceStart') {
+      // Fallback/backup for race start message
+      if (!window.raceState.raceStarted) {
+        // Force race to start if countdown was started but race hasn't started yet
+        window.raceState.raceStarted = true;
+      }
     }
   });
   
@@ -408,4 +499,71 @@ export function sendCarData(gameState) {
       console.error('Error sending car data:', err);
     }
   });
+}
+
+// Add method to check if all players are connected
+export function checkAllPlayersConnected() {
+  if (!state.gameConfig || !state.gameConfig.players) return false;
+  
+  const myPlayerId = localStorage.getItem('myPlayerId');
+  let connectedCount = 1; // Count myself
+  
+  // Count all established connections
+  for (const player of state.gameConfig.players) {
+    if (player.id === myPlayerId) continue; // Skip myself
+    
+    // Check if this player is connected
+    if (state.playerConnections.some(conn => conn.peer === player.id)) {
+      connectedCount++;
+    }
+  }
+  
+  return connectedCount === state.gameConfig.players.length;
+}
+
+// Add method to broadcast race start
+export function broadcastRaceStart() {
+  state.playerConnections.forEach(conn => {
+    try {
+      if (conn && conn.open) {
+        conn.send({
+          type: 'raceStart',
+          timestamp: Date.now()
+        });
+      }
+    } catch (err) {
+      console.error('Error sending race start event:', err);
+    }
+  });
+}
+
+// Completely revise the broadcast functions for better reliability
+export function broadcastCountdownStart() {
+  console.log(`🔴 Broadcasting countdown start to ${state.playerConnections.length} players...`);
+  
+  if (state.playerConnections.length === 0) {
+    console.error('No player connections available for broadcasting!');
+    return;
+  }
+  
+  let successCount = 0;
+  state.playerConnections.forEach((conn, index) => {
+    try {
+      if (conn && conn.open) {
+        const message = {
+          type: 'countdownStart',
+          timestamp: Date.now()
+        };
+        console.log(`Sending countdown to player ${index + 1}:`, conn.peer);
+        conn.send(message);
+        successCount++;
+      } else {
+        console.error(`Connection ${index} is not open! State:`, conn ? conn.open : 'null');
+      }
+    } catch (err) {
+      console.error(`Error sending countdown to player ${index}:`, err);
+    }
+  });
+  
+  console.log(`Countdown broadcast attempted: ${successCount}/${state.playerConnections.length} successful`);
 }

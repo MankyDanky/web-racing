@@ -90,6 +90,165 @@ let _tempVector1 = new THREE.Vector3();
 let currentGatePosition = new THREE.Vector3(0, 2, 0);
 let currentGateQuaternion = new THREE.Quaternion();
 
+// Race state variables
+let raceState = {
+  isMultiplayer: false,
+  allPlayersConnected: false,
+  countdownStarted: false,
+  raceStarted: false,
+  countdownValue: 3
+};
+
+// Make raceState globally accessible for multiplayer.js
+window.raceState = raceState;
+
+// UI Elements
+let countdownOverlay;
+let waitingForPlayersOverlay;
+
+// Add these functions before init():
+
+// Create the waiting and countdown UI elements
+function createRaceUI() {
+  // Create waiting for players overlay
+  waitingForPlayersOverlay = document.createElement('div');
+  waitingForPlayersOverlay.style.position = 'absolute';
+  waitingForPlayersOverlay.style.top = '50%';
+  waitingForPlayersOverlay.style.left = '50%';
+  waitingForPlayersOverlay.style.transform = 'translate(-50%, -50%)';
+  
+  // Updated to match speedometer
+  waitingForPlayersOverlay.style.background = 'rgba(0, 0, 0, 0.5)'; // Match speedometer opacity
+  waitingForPlayersOverlay.style.color = '#fff'; // White text like speedometer
+  waitingForPlayersOverlay.style.padding = '30px 40px';
+  waitingForPlayersOverlay.style.borderRadius = '10px';
+  waitingForPlayersOverlay.style.fontFamily = "'Exo 2', sans-serif";
+  waitingForPlayersOverlay.style.fontSize = '24px';
+  waitingForPlayersOverlay.style.textAlign = 'center';
+  waitingForPlayersOverlay.style.zIndex = '1000';
+  
+  // Add the box shadow and text glow like the speedometer
+  waitingForPlayersOverlay.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  
+  // Updated HTML with styled title
+  waitingForPlayersOverlay.innerHTML = `
+    <h2 style="margin-top: 0; color: #fff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);">Waiting for players...</h2>
+    <div id="player-list" style="margin-top:20px; text-align:left;"></div>
+  `;
+  
+  // Create countdown overlay with matching style
+  countdownOverlay = document.createElement('div');
+  countdownOverlay.style.position = 'absolute';
+  countdownOverlay.style.top = '50%';
+  countdownOverlay.style.left = '50%';
+  countdownOverlay.style.transform = 'translate(-50%, -50%)';
+  
+  // Updated to match speedometer
+  countdownOverlay.style.background = 'rgba(0, 0, 0, 0.5)';
+  countdownOverlay.style.color = '#fff';
+  countdownOverlay.style.padding = '40px 60px';
+  countdownOverlay.style.borderRadius = '10px';
+  countdownOverlay.style.fontFamily = "'Exo 2', sans-serif";
+  countdownOverlay.style.fontSize = '60px'; // Larger font for better visibility
+  countdownOverlay.style.fontWeight = 'bold';
+  countdownOverlay.style.textAlign = 'center';
+  countdownOverlay.style.zIndex = '1000';
+  
+  // Add the box shadow and text glow like the speedometer
+  countdownOverlay.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  countdownOverlay.style.textShadow = '0 0 15px rgba(255, 255, 255, 0.5)';
+  
+  countdownOverlay.innerHTML = `3`;
+  
+  // Hide both initially
+  countdownOverlay.style.display = 'none';
+  
+  if (raceState.isMultiplayer) {
+    document.body.appendChild(waitingForPlayersOverlay);
+  }
+  document.body.appendChild(countdownOverlay);
+  
+  // Make countdown overlay globally accessible for multiplayer.js
+  window.countdownOverlay = countdownOverlay; // Add this line
+}
+
+// Update the waiting for players UI
+function updateWaitingUI() {
+  if (!waitingForPlayersOverlay || !raceState.isMultiplayer) return;
+  
+  const playerListEl = waitingForPlayersOverlay.querySelector('#player-list');
+  if (!playerListEl) return;
+  
+  let playerListHTML = '';
+  allPlayers.forEach(player => {
+    // Check if this player is connected 
+    const isConnected = multiplayerState.playerConnections.some(conn => conn.peer === player.id) || 
+                        player.id === localStorage.getItem('myPlayerId');
+    
+    // Updated dot colors to match the white theme
+    const connectionStatus = isConnected ? 
+      '<span style="color:#90ff90; text-shadow: 0 0 5px rgba(144, 255, 144, 0.7);">● Connected</span>' : 
+      '<span style="color:#ff9090; text-shadow: 0 0 5px rgba(255, 144, 144, 0.7);">○ Waiting...</span>';
+    
+    playerListHTML += `<div style="margin-bottom: 8px;">${player.name} (${player.playerColor}) - ${connectionStatus}</div>`;
+  });
+  
+  playerListEl.innerHTML = playerListHTML;
+}
+
+// Improve the startCountdown function with better logging and state handling
+function startCountdown() {
+  console.log('startCountdown called, display state:', countdownOverlay.style.display);
+  
+  if (countdownOverlay.style.display === 'block') {
+    console.log('Countdown already in progress, ignoring call');
+    return; // Already counting down
+  }
+  
+  // Hide waiting overlay
+  if (waitingForPlayersOverlay) {
+    waitingForPlayersOverlay.style.display = 'none';
+  }
+  
+  console.log('Starting countdown sequence...');
+  
+  // Show countdown overlay
+  countdownOverlay.style.display = 'block';
+  raceState.countdownStarted = true;
+  
+  // Run countdown sequence
+  raceState.countdownValue = 3;
+  countdownOverlay.innerHTML = raceState.countdownValue.toString();
+  
+  const countdownInterval = setInterval(() => {
+    raceState.countdownValue--;
+    console.log(`Countdown: ${raceState.countdownValue}`);
+    
+    if (raceState.countdownValue > 0) {
+      countdownOverlay.innerHTML = raceState.countdownValue.toString();
+    } else if (raceState.countdownValue === 0) {
+      countdownOverlay.innerHTML = 'GO!';
+    } else {
+      // Countdown complete
+      clearInterval(countdownInterval);
+      countdownOverlay.style.display = 'none';
+      
+      // Set race started and log it
+      raceState.raceStarted = true;
+      console.log('Race started!', raceState);
+      
+      // Broadcast race start to other players if host
+      if (isHost) {
+        console.log('Broadcasting race start as host');
+        multiplayerState.broadcastRaceStart();
+      }
+    }
+  }, 1000);
+}
+
+// Make startCountdown globally accessible for the multiplayer module
+window.startCountdown = startCountdown;
+
 // Initialize everything
 function init() {
   console.log("Main module loaded");
@@ -200,6 +359,12 @@ function init() {
     
     // Animation will start in the callback when the car is fully loaded
   });
+
+  // Check if this is a multiplayer game
+  raceState.isMultiplayer = gameConfig && gameConfig.players && gameConfig.players.length > 1;
+
+  // Later, after you've created the UI:
+  createRaceUI();
 }
 
 // Setup key controls for vehicle
@@ -287,7 +452,8 @@ function animate() {
         window.Ammo, 
         { physicsWorld, tmpTrans }, 
         carState, 
-        debugObjects
+        debugObjects,
+        raceState // Pass the race state
       );
 
       // Update speed
@@ -344,6 +510,26 @@ function animate() {
     // Send car data as before
     if (Math.random() < 0.2) {
       sendCarData({carModel});
+    }
+
+    // Check if all players are connected in multiplayer
+    if (raceState.isMultiplayer && !raceState.allPlayersConnected) {
+      // Update waiting UI
+      updateWaitingUI();
+      
+      // Check if all players are connected
+      if (multiplayerState.checkAllPlayersConnected()) {
+        raceState.allPlayersConnected = true;
+        
+        // Host triggers synchronized countdown
+        if (isHost) {
+          console.log("All players connected! Broadcasting countdown start...");
+          // First broadcast countdown signal to all clients
+          multiplayerState.broadcastCountdownStart();
+          // Then start countdown locally (after a tiny delay to ensure network messages go out first)
+          setTimeout(startCountdown, 50);
+        }
+      }
     }
   }
   

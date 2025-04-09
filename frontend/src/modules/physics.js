@@ -25,7 +25,7 @@ export function initPhysics(ammo) {
 }
 
 // Update physics simulation
-export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObjects) {
+export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObjects, raceState) {
   const { physicsWorld, tmpTrans } = physicsState;
   const { 
     carBody, vehicle, carModel, wheelMeshes, 
@@ -52,28 +52,36 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
   const dotForward = carForward.dot(velocityThree);
   const maxEngineForce = 4000;
   const maxBrakingForce = 50;
+  
+  // Check if the race has started before allowing engine forces
   let engineForce = 0;
   let brakingForce = 0;
   
-  // Handle key inputs with proper braking logic
-  if (keyState.w) {
-    // Accelerate forward
-    engineForce = maxEngineForce;
-    brakingForce = 0;
-  } else if (keyState.s) {
-    if (dotForward > 0.1) {
-      // Moving forward - apply brakes when S is pressed
-      engineForce = 0;
-      brakingForce = maxBrakingForce;
-    } else {
-      // Stopped or moving backward - apply reverse
-      engineForce = -maxEngineForce / 2;
+  // Only allow movement if race has started or not in multiplayer
+  if (!raceState.isMultiplayer || raceState.raceStarted) {
+    // Handle key inputs with proper braking logic
+    if (keyState.w) {
+      // Accelerate forward
+      engineForce = maxEngineForce;
       brakingForce = 0;
+    } else if (keyState.s) {
+      if (dotForward > 0.1) {
+        // Moving forward - apply brakes when S is pressed
+        engineForce = 0;
+        brakingForce = maxBrakingForce;
+      } else {
+        // Stopped or moving backward - apply reverse
+        engineForce = -maxEngineForce / 2;
+        brakingForce = 0;
+      }
+    } else {
+      // No key pressed - engine off, light braking
+      engineForce = 0;
+      brakingForce = 20;
     }
   } else {
-    // No key pressed - engine off, light braking
-    engineForce = 0;
-    brakingForce = 20;
+    // Always apply brakes during countdown/waiting
+    brakingForce = maxBrakingForce;
   }
   
   // Apply forces to all wheels
