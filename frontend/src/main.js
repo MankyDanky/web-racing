@@ -61,23 +61,6 @@ let vehicle; // Ammo.js vehicle instance
 let wheelMeshes = [];
 let carModel;
 
-// Vehicle parameters
-const VEHICLE_WIDTH = 2.0;
-const VEHICLE_HEIGHT = 0.6;
-const VEHICLE_LENGTH = 4.0;
-const WHEEL_RADIUS = 0.4;
-const WHEEL_WIDTH = 0.25;
-const SUSPENSION_REST_LENGTH = 0.5;
-const WHEEL_X_OFFSET = 0.8;
-const WHEEL_Z_OFFSET = 1.5;
-
-// Physics tuning parameters
-const SUSPENSION_STIFFNESS = 30;
-const SUSPENSION_DAMPING = 4.5;
-const SUSPENSION_COMPRESSION = 4.5;
-const ROLL_INFLUENCE = 0.05;
-const WHEEL_FRICTION = 150;
-
 // Control state
 const keyState = {
   w: false, s: false, a: false, d: false
@@ -227,9 +210,18 @@ function setupKeyControls() {
     if (event.key.toLowerCase() === 'a') keyState.a = true;
     if (event.key.toLowerCase() === 'd') keyState.d = true;
 
+    // Replace the keydown R handler with this improved version:
     if (event.key.toLowerCase() === 'r') {
-      if (window.Ammo && carBody) {
-        currentSteeringAngle = resetCarPosition(window.Ammo, carBody, vehicle, currentSteeringAngle, currentGatePosition, currentGateQuaternion);
+      if (window.Ammo && carBody && gateData) {
+        // Use the gateData values instead of the global variables
+        currentSteeringAngle = resetCarPosition(
+          window.Ammo, 
+          carBody, 
+          vehicle, 
+          currentSteeringAngle, 
+          gateData.currentGatePosition, 
+          gateData.currentGateQuaternion
+        );
       }
     }
   });
@@ -305,11 +297,28 @@ function animate() {
       // Update car position
       updateCarPosition(window.Ammo, vehicle, carModel, wheelMeshes);
 
+      // Add this line to check if car has fallen off the track
+      checkGroundCollision(window.Ammo, carBody, () => {
+        // This will reset the car to the last gate position when it falls off
+        currentSteeringAngle = resetCarPosition(
+          window.Ammo, 
+          carBody, 
+          vehicle, 
+          currentSteeringAngle, 
+          gateData.currentGatePosition, 
+          gateData.currentGateQuaternion
+        );
+      });
+      
       accumulator -= FIXED_PHYSICS_STEP;
       updateCamera();
       if (gateData) {
         // Check if player passed through a gate
         const raceFinished = checkGateProximity(carModel, gateData);
+        
+        // IMPORTANT: Update our local copies of the gate position for resets
+        currentGatePosition.copy(gateData.currentGatePosition);
+        currentGateQuaternion.copy(gateData.currentGateQuaternion);
         
         // Show finish message if race is complete
         if (raceFinished) {

@@ -12,11 +12,11 @@ const WHEEL_X_OFFSET = 0.8;
 const WHEEL_Z_OFFSET = 1.5;
 
 // Physics tuning parameters
-const SUSPENSION_STIFFNESS = 30;
-const SUSPENSION_DAMPING = 4.5;
-const SUSPENSION_COMPRESSION = 4.5;
+const SUSPENSION_STIFFNESS = 25;
+const SUSPENSION_DAMPING = 4.0;
+const SUSPENSION_COMPRESSION = 4.0;
 const ROLL_INFLUENCE = 0.05;
-const WHEEL_FRICTION = 150;
+const WHEEL_FRICTION = 120;
 
 // Steering parameters
 const MAX_STEERING_ANGLE = 0.25; // Maximum steering angle in radians
@@ -36,14 +36,15 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
     currentSteeringAngle: 0
   };
   
-  // Create chassis physics body (same as before)
+  // Create chassis physics body with modified dimensions
   const chassisShape = new ammo.btBoxShape(
-    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2, VEHICLE_LENGTH/2)
+    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2 * 0.8, VEHICLE_LENGTH/2 * 0.9)
   );
   
   const chassisTransform = new ammo.btTransform();
   chassisTransform.setIdentity();
-  chassisTransform.setOrigin(new ammo.btVector3(0, 5, 0));
+  // Move the chassis origin up slightly to prevent underbody scraping
+  chassisTransform.setOrigin(new ammo.btVector3(0, 5.2, 0));
   
   const chassisMotionState = new ammo.btDefaultMotionState(chassisTransform);
   const chassisMass = 800;
@@ -73,10 +74,10 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   
   // Add all four wheels
   const wheelPositions = [
-    { x: -WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Front left
-    { x: WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  // Front right
-    { x: -WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, // Back left
-    { x: WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  // Back right
+    { x: -WHEEL_X_OFFSET, y: 0.2, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Lowered y value
+    { x: WHEEL_X_OFFSET, y: 0.2, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  
+    { x: -WHEEL_X_OFFSET, y: 0.2, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, 
+    { x: WHEEL_X_OFFSET, y: 0.2, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  
   ];
   
   // Create wheels with physics (but without visuals yet)
@@ -103,6 +104,8 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
     wheelInfo.set_m_wheelsDampingCompression(SUSPENSION_COMPRESSION);
     wheelInfo.set_m_frictionSlip(WHEEL_FRICTION);
     wheelInfo.set_m_rollInfluence(ROLL_INFLUENCE);
+    // Add this new line:
+    wheelInfo.set_m_maxSuspensionTravelCm(SUSPENSION_REST_LENGTH * 150); // 50% more travel
     
     // Add a placeholder for the wheel mesh
     carComponents.wheelMeshes.push(null);

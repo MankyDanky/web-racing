@@ -115,6 +115,9 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
   
   // Create track collision shape using triangle mesh
   const trackShape = new ammo.btBvhTriangleMeshShape(triangleMesh, true, true);
+
+  // Add a slight margin to the track collision shape to smooth transitions
+  trackShape.setMargin(0.05); // 5cm margin helps smooth over minor gaps
   
   // The rigid body uses identity transform since all transformations are in the vertices
   const trackTransform = new ammo.btTransform();
@@ -133,43 +136,12 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
   );
   
   const trackBody = new ammo.btRigidBody(rbInfo);
-  trackBody.setFriction(0.8); // Track should have good grip
+  trackBody.setFriction(1.0); // Increase from 0.8 for better grip on ramps
   
   // Add to physics world
   physicsWorld.addRigidBody(trackBody);
   
-  // Add ground respawn plane at y = -10
-  addGroundRespawnPlane(ammo, physicsWorld);
-  
   console.log("Track physics collider created successfully");
-}
-
-// Add invisible plane to detect when car falls off track
-function addGroundRespawnPlane(ammo, physicsWorld) {
-  // Create a large ground plane below the track
-  const groundShape = new ammo.btStaticPlaneShape(
-    new ammo.btVector3(0, 1, 0), // Normal pointing up
-    -10 // Distance from origin along normal (y = -10)
-  );
-  
-  // Create transform
-  const groundTransform = new ammo.btTransform();
-  groundTransform.setIdentity();
-  
-  // Create motion state
-  const groundMotionState = new ammo.btDefaultMotionState(groundTransform);
-  
-  // Create rigid body (static - mass = 0)
-  const groundInfo = new ammo.btRigidBodyConstructionInfo(
-    0, groundMotionState, groundShape, new ammo.btVector3(0, 0, 0)
-  );
-  
-  const groundBody = new ammo.btRigidBody(groundInfo);
-  groundBody.setUserIndex(999); // Special ID for identification
-  
-  // Add to physics world
-  physicsWorld.addRigidBody(groundBody);
-  console.log("Ground respawn plane created at y = -10");
 }
 
 // Function to load map decorations
@@ -241,7 +213,7 @@ export function checkGroundCollision(ammo, carBody, resetFunction) {
   const position = transform.getOrigin();
   
   // If car is below certain height, reset it
-  if (position.y() < -8) {
+  if (position.y() < 0) {
     console.log("Car fell off track - resetting position");
     if (resetFunction) resetFunction(ammo);
   }
