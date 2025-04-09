@@ -1,197 +1,192 @@
-// physics.js - Physics initialization and simulation
-import { updateSteering } from './car.js';
-import { updateSpeedometer } from './ui.js';
 import * as THREE from 'three';
 
-// Initialize physics engine
+// Initialize physics world
 export function initPhysics(ammo) {
+  // Create physics configuration
   const collisionConfig = new ammo.btDefaultCollisionConfiguration();
   const dispatcher = new ammo.btCollisionDispatcher(collisionConfig);
   const broadphase = new ammo.btDbvtBroadphase();
   const solver = new ammo.btSequentialImpulseConstraintSolver();
   
+  // Create physics world
   const physicsWorld = new ammo.btDiscreteDynamicsWorld(
     dispatcher, broadphase, solver, collisionConfig
   );
+  
+  // Set gravity
   physicsWorld.setGravity(new ammo.btVector3(0, -20, 0));
   
-  return physicsWorld;
+  // Create temporary transform for reuse
+  const tmpTrans = new ammo.btTransform();
+  
+  console.log("Physics world initialized");
+  
+  return { physicsWorld, tmpTrans };
 }
 
 // Update physics simulation
-export function updatePhysics(deltaTime, ammo, gameState) {
-  const { physicsWorld, vehicle, carBody, carModel, wheelMeshes, keyState } = gameState;
+export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObjects) {
+  const { physicsWorld, tmpTrans } = physicsState;
+  const { 
+    carBody, vehicle, carModel, wheelMeshes, 
+    keyState, currentSteeringAngle, updateSteering
+  } = carState;
   
-  if (!vehicle || !carModel) return;
+  if (!vehicle || !carModel) return { currentSpeed: 0 };
   
-  // Update steering 
-  updateSteering(deltaTime, gameState);
-  
-  // Get current velocity
+  // Get current velocity to determine if we're moving forward or backward
   const velocity = carBody.getLinearVelocity();
   
-  // Get car forward direction
+  // Get forward direction using Three.js
   const carForward = new THREE.Vector3();
   carModel.getWorldDirection(carForward);
   
   // Convert Ammo velocity to Three.js vector
   const velocityThree = new THREE.Vector3(
-    velocity.x(), velocity.y(), velocity.z()
+    velocity.x(), 
+    velocity.y(), 
+    velocity.z()
   );
   
-  // Calculate dot product for direction
+  // Calculate dot product using Three.js
   const dotForward = carForward.dot(velocityThree);
-  
-  // Apply appropriate forces based on key input
   const maxEngineForce = 4000;
   const maxBrakingForce = 50;
   let engineForce = 0;
   let brakingForce = 0;
   
+  // Handle key inputs with proper braking logic
   if (keyState.w) {
+    // Accelerate forward
     engineForce = maxEngineForce;
     brakingForce = 0;
   } else if (keyState.s) {
     if (dotForward > 0.1) {
-      // Braking
+      // Moving forward - apply brakes when S is pressed
       engineForce = 0;
       brakingForce = maxBrakingForce;
     } else {
-      // Reverse
+      // Stopped or moving backward - apply reverse
       engineForce = -maxEngineForce / 2;
       brakingForce = 0;
     }
   } else {
-    // Coast with light braking
+    // No key pressed - engine off, light braking
     engineForce = 0;
     brakingForce = 20;
   }
   
-  // Apply forces to wheels
+  // Apply forces to all wheels
   for (let i = 0; i < vehicle.getNumWheels(); i++) {
-    if (i >= 2) { // Engine force to rear wheels only
+    // Engine force to rear wheels only
+    if (i >= 2) {
       vehicle.applyEngineForce(engineForce, i);
     }
+    
+    // Braking force to all wheels for better braking
     vehicle.setBrake(brakingForce, i);
   }
   
-  // Calculate car speed in km/h
-  const speedKPH = velocityThree.length() * 3.6;
+  // Call updateSteering to update the steering angle
+  const newSteeringAngle = updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle);
   
-  // Update speedometer
-  updateSpeedometer(speedKPH);
+  // Calculate car speed in km/h (assuming your units are meters)
+  const speedKPH = velocityThree.length() * 3.6; // Convert m/s to km/h
   
-  // Clean up Ammo.js objects
+  // Clean up Ammo.js objects to prevent memory leaks
   ammo.destroy(velocity);
   
   // Step physics simulation
   physicsWorld.stepSimulation(deltaTime, 10);
   
-  // Update car visual position
-  updateCarPosition(ammo, gameState);
-  
-  // Check if car fell off track
-  checkGroundCollision(ammo, gameState);
-}
-
-// Update car visual position from physics
-function updateCarPosition(ammo, gameState) {
-  const { vehicle, carModel, wheelMeshes } = gameState;
-  
-  // Update chassis transform
-  const chassisWorldTrans = vehicle.getChassisWorldTransform();
-  const position = chassisWorldTrans.getOrigin();
-  const quaternion = chassisWorldTrans.getRotation();
-  
-  carModel.position.set(position.x(), position.y(), position.z());
-  carModel.quaternion.set(
-    quaternion.x(), quaternion.y(), quaternion.z(), quaternion.w()
-  );
-  
-  // Update wheel transforms with quaternion normalization
-  for (let i = 0; i < vehicle.getNumWheels(); i++) {
-    vehicle.updateWheelTransform(i, true);
-    const transform = vehicle.getWheelInfo(i).get_m_worldTransform();
-    const wheelPosition = transform.getOrigin();
-    const wheelQuaternion = transform.getRotation();
-    
-    // Create THREE quaternion and normalize it
-    const quat = new THREE.Quaternion(
-      wheelQuaternion.x(),
-      wheelQuaternion.y(),
-      wheelQuaternion.z(),
-      wheelQuaternion.w()
-    ).normalize();
-    
-    wheelMeshes[i].position.set(
-      wheelPosition.x(), wheelPosition.y(), wheelPosition.z()
-    );
-    wheelMeshes[i].quaternion.copy(quat);
-  }
-}
-
-// Check if car fell below ground level
-export function checkGroundCollision(ammo, gameState) {
-  const { carBody } = gameState;
-  if (!carBody) return;
-  
-  const transform = new ammo.btTransform();
-  const motionState = carBody.getMotionState();
-  motionState.getWorldTransform(transform);
-  const position = transform.getOrigin();
-  
-  if (position.y() < -8) {
-    console.log("Car fell off track - resetting position");
-    resetCarPosition(ammo, gameState);
+  // Update debug objects if any
+  if (debugObjects && debugObjects.length > 0) {
+    updateDebugObjects(vehicle, debugObjects, tmpTrans);
   }
   
-  ammo.destroy(transform);
+  // Return both speed and the new steering angle
+  return { 
+    currentSpeed: speedKPH,
+    currentSteeringAngle: newSteeringAngle 
+  };
 }
 
-// Reset car position (to last gate or start)
-export function resetCarPosition(ammo, gameState) {
-  const { carBody, vehicle, currentGatePosition, currentGateQuaternion } = gameState;
-  
-  // Cancel all movement
-  const zero = new ammo.btVector3(0, 0, 0);
-  carBody.setLinearVelocity(zero);
-  carBody.setAngularVelocity(zero);
-  
-  // Set position and rotation to match gate
-  const resetTransform = new ammo.btTransform();
-  resetTransform.setIdentity();
-  
-  // Set position (slightly above gate)
-  resetTransform.setOrigin(new ammo.btVector3(
-    currentGatePosition.x,
-    currentGatePosition.y + 2,
-    currentGatePosition.z
-  ));
-  
-  // Set rotation to match gate
-  const rotQuat = new ammo.btQuaternion(
-    currentGateQuaternion.x,
-    currentGateQuaternion.y,
-    currentGateQuaternion.z,
-    currentGateQuaternion.w
-  );
-  resetTransform.setRotation(rotQuat);
-  
-  // Apply transform
-  carBody.setWorldTransform(resetTransform);
-  carBody.getMotionState().setWorldTransform(resetTransform);
-  
-  // Reset steering
-  gameState.currentSteeringAngle = 0;
-  for (let i = 0; i < vehicle.getNumWheels(); i++) {
-    if (i < 2) { // Front wheels only
-      vehicle.setSteeringValue(0, i);
+// Update debug objects
+function updateDebugObjects(vehicle, debugObjects, tmpTrans) {
+  debugObjects.forEach((obj, index) => {
+    if (obj.isWheel) {
+      const wheelIndex = obj.wheelIndex % 4;
+      vehicle.updateWheelTransform(wheelIndex, true);
+      const transform = vehicle.getWheelInfo(wheelIndex).get_m_worldTransform();
+      const pos = transform.getOrigin();
+      const quat = transform.getRotation();
+      
+      obj.mesh.position.set(pos.x(), pos.y(), pos.z());
+      obj.mesh.quaternion.set(quat.x(), quat.y(), quat.z(), quat.w());
+    } else if (obj.body) {
+      const ms = obj.body.getMotionState();
+      if (ms) {
+        ms.getWorldTransform(tmpTrans);
+        const p = tmpTrans.getOrigin();
+        const q = tmpTrans.getRotation();
+        
+        obj.mesh.position.set(p.x(), p.y(), p.z());
+        obj.mesh.quaternion.set(q.x(), q.y(), q.z(), q.w());
+      }
     }
-    vehicle.updateWheelTransform(i, true);
+  });
+}
+
+// Physics time step constants
+export const FIXED_PHYSICS_STEP = 1/60; // 60Hz physics
+
+// Add a rigid body to the physics world
+export function addRigidBody(
+  ammo, physicsWorld, shape, mass, position, quaternion, 
+  friction = 0.5, restitution = 0.2
+) {
+  const transform = new ammo.btTransform();
+  transform.setIdentity();
+  
+  // Set position
+  transform.setOrigin(
+    new ammo.btVector3(position.x, position.y, position.z)
+  );
+  
+  // Set rotation
+  if (quaternion) {
+    transform.setRotation(
+      new ammo.btQuaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w)
+    );
   }
   
-  // Clean up
-  ammo.destroy(zero);
-  ammo.destroy(rotQuat);
-  ammo.destroy(resetTransform);
+  const motionState = new ammo.btDefaultMotionState(transform);
+  const localInertia = new ammo.btVector3(0, 0, 0);
+  
+  // Calculate inertia for dynamic bodies
+  if (mass > 0) {
+    shape.calculateLocalInertia(mass, localInertia);
+  }
+  
+  // Create rigid body info
+  const rbInfo = new ammo.btRigidBodyConstructionInfo(
+    mass, motionState, shape, localInertia
+  );
+  
+  // Create rigid body
+  const body = new ammo.btRigidBody(rbInfo);
+  
+  // Set friction and restitution
+  body.setFriction(friction);
+  body.setRestitution(restitution);
+  
+  // Add to physics world
+  physicsWorld.addRigidBody(body);
+  
+  // Clean up temporary Ammo objects
+  ammo.destroy(transform);
+  ammo.destroy(localInertia);
+  ammo.destroy(rbInfo);
+  
+  return body;
 }
