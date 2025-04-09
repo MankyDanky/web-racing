@@ -96,21 +96,19 @@ let opponentCarData = {
 };
 let opponentCars = {};
 
-// Add these globals at the top with your other global variables
 let gates = [];
 let currentGateIndex = 0;
-let totalGates = 8; // 7 numbered gates + finish
+let totalGates = 8;
 let fadingGates = {};
-const GATE_FADE_DURATION = 1.0; // Duration of fade in seconds
+const GATE_FADE_DURATION = 1.0; 
 let _tempVector1 = new THREE.Vector3();
+let currentGatePosition = new THREE.Vector3(0, 2, 0);
+let currentGateQuaternion = new THREE.Quaternion();
 
 // Initialize everything
 function init() {
   const loadingEl = document.createElement('div');
   loadingEl.style.position = 'absolute';
-  loadingEl.style.width = '100%';
-  loadingEl.style.height = '100%';
-  loadingEl.style.top = '0';
   loadingEl.style.left = '0';
   loadingEl.style.backgroundColor = '#000';
   loadingEl.style.color = '#fff';
@@ -493,7 +491,15 @@ function setupKeyControls() {
     if (event.key.toLowerCase() === 's') keyState.s = true;
     if (event.key.toLowerCase() === 'a') keyState.a = true;
     if (event.key.toLowerCase() === 'd') keyState.d = true;
+
+    if (event.key.toLowerCase() === 'r') {
+      if (window.Ammo && carBody) {
+        resetCarPosition(window.Ammo);
+      }
+    }
   });
+
+  
   
   document.addEventListener('keyup', (event) => {
     if (event.key.toLowerCase() === 'w') keyState.w = false;
@@ -1635,7 +1641,14 @@ function resetCarPosition(ammo) {
   // Reset position transform
   const resetTransform = new ammo.btTransform();
   resetTransform.setIdentity();
-  resetTransform.setOrigin(new ammo.btVector3(0, 5, 0)); // Start position, a bit above ground
+  resetTransform.setOrigin(new ammo.btVector3(currentGatePosition.x, currentGatePosition.y + 2, currentGatePosition.z)); 
+  const rotQuat = new ammo.btQuaternion(
+    currentGateQuaternion.x,
+    currentGateQuaternion.y,
+    currentGateQuaternion.z,
+    currentGateQuaternion.w
+  );
+  resetTransform.setRotation(rotQuat);
   
   // Apply transform
   carBody.setWorldTransform(resetTransform);
@@ -1809,7 +1822,8 @@ function checkGateProximity() {
   // Compare with threshold squared (2 units * 8 scale factor)^2 = 256
   if (distanceSquared < 256) {
     console.log(`Passed through gate-${currentGateIndex === 7 ? 'finish' : currentGateIndex}`);
-    
+    currentGatePosition.copy(gatePos)
+    currentGateQuaternion.copy(gate.quaternion);
     // Mark gate as passed
     gate.userData.passed = true;
     
