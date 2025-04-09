@@ -358,24 +358,14 @@ function setupEnhancedLighting() {
   });
   
   // Reduce ambient light intensity for better shadow definition
-  const ambientLight = new THREE.AmbientLight(0xcccccc, 1);
+  const ambientLight = new THREE.AmbientLight(0xcccccc, 2);
   scene.add(ambientLight);
   
   // Primary directional light (sun)
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
-  directionalLight.position.set(40, 80, 30);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 3.5);
+  directionalLight.position.set(40, 250, 30);
   
   scene.add(directionalLight);
-  
-  // Second light with wider frustum but lower resolution for distant shadows
-  const secondaryLight = new THREE.DirectionalLight(0xffffcc, 1.2);
-  secondaryLight.position.set(-30, 50, -30);
-  
-  scene.add(secondaryLight);
-  
-  // Add hemisphere light
-  const hemisphereLight = new THREE.HemisphereLight(0xaaccff, 0x70a070, 1); // Reduced from 1.0
-  scene.add(hemisphereLight);
 }
 
 // Function to initialize UI elements
