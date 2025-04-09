@@ -1,10 +1,8 @@
-// track.js - Track and decoration loading
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-// Load track model and add physics
-export function loadTrackModel(ammo, mapId, gameState) {
-  const { scene, physicsWorld } = gameState;
+// Function to load the track model and add to scene
+export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld) {
   const loader = new GLTFLoader();
   
   loader.load(
@@ -12,17 +10,20 @@ export function loadTrackModel(ammo, mapId, gameState) {
     (gltf) => {
       const track = gltf.scene;
       
-      // Apply scale and position
+      // Scale to match the world scale
       track.scale.set(8, 8, 8);
+      
+      // Position at origin
       track.position.set(0, 0, 0);
       track.rotation.set(0, 0, 0);
       
-      // Configure materials and shadows
+      // Make sure track casts and receives shadows
       track.traverse((node) => {
         if (node.isMesh) {
           node.castShadow = true;
-          node.receiveShadow = true;
+          node.receiveShadow = true; // Enable for better lighting
           
+          // Enhance track materials
           if (node.material) {
             node.material.roughness = 0.7;
             node.material.metalness = 0.3;
@@ -34,7 +35,7 @@ export function loadTrackModel(ammo, mapId, gameState) {
       scene.add(track);
       console.log(`Map ${mapId} track loaded successfully`);
       
-      // Add track collider
+      // Add physics collider for the track
       addTrackCollider(track, ammo, physicsWorld);
     },
     (xhr) => {
@@ -46,27 +47,27 @@ export function loadTrackModel(ammo, mapId, gameState) {
   );
 }
 
-// Create physics collider for track
+// Function to create a physics collider for the entire track
 function addTrackCollider(trackModel, ammo, physicsWorld) {
-  // Extract mesh geometries
+  // Extract all mesh geometries from the track
   let vertices = [];
   let indices = [];
   let indexOffset = 0;
   
-  // Apply all transformations
+  // Update world matrix to apply all transformations
   trackModel.updateMatrixWorld(true);
   
-  // Traverse meshes
+  // Traverse all meshes in the track model
   trackModel.traverse(child => {
     if (child.isMesh && child.geometry) {
       // Get vertices
       const positionAttr = child.geometry.getAttribute('position');
       const vertexCount = positionAttr.count;
       
-      // Apply mesh's transform
+      // Apply mesh's transform to vertices
       const worldMatrix = child.matrixWorld;
       
-      // Process vertices with transformation
+      // Extract vertices with transformation
       for (let i = 0; i < vertexCount; i++) {
         const vertex = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
         vertex.applyMatrix4(worldMatrix);
@@ -74,14 +75,14 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
         vertices.push(vertex.x, vertex.y, vertex.z);
       }
       
-      // Process indices
+      // Get indices - if they exist
       if (child.geometry.index) {
         const indices32 = child.geometry.index.array;
         for (let i = 0; i < indices32.length; i++) {
           indices.push(indices32[i] + indexOffset);
         }
       } else {
-        // No indices - use vertices directly
+        // No indices - assume vertices are already arranged as triangles
         for (let i = 0; i < vertexCount; i++) {
           indices.push(i + indexOffset);
         }
@@ -94,7 +95,7 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
   // Create Ammo triangle mesh
   const triangleMesh = new ammo.btTriangleMesh();
   
-  // Add triangles to mesh
+  // Add all triangles to the mesh
   for (let i = 0; i < indices.length; i += 3) {
     const i1 = indices[i] * 3;
     const i2 = indices[i+1] * 3;
@@ -112,23 +113,27 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
     ammo.destroy(v3);
   }
   
-  // Create track shape
+  // Create track collision shape using triangle mesh
   const trackShape = new ammo.btBvhTriangleMeshShape(triangleMesh, true, true);
   
-  // Create rigid body (static - mass = 0)
+  // The rigid body uses identity transform since all transformations are in the vertices
   const trackTransform = new ammo.btTransform();
   trackTransform.setIdentity();
   
+  // Create motion state
   const motionState = new ammo.btDefaultMotionState(trackTransform);
+  
+  // Set up track rigid body (static - mass = 0)
   const mass = 0;
   const localInertia = new ammo.btVector3(0, 0, 0);
   
+  // Create rigid body
   const rbInfo = new ammo.btRigidBodyConstructionInfo(
     mass, motionState, trackShape, localInertia
   );
   
   const trackBody = new ammo.btRigidBody(rbInfo);
-  trackBody.setFriction(0.8);
+  trackBody.setFriction(0.8); // Track should have good grip
   
   // Add to physics world
   physicsWorld.addRigidBody(trackBody);
@@ -165,13 +170,10 @@ function addGroundRespawnPlane(ammo, physicsWorld) {
   // Add to physics world
   physicsWorld.addRigidBody(groundBody);
   console.log("Ground respawn plane created at y = -10");
-  
-  return groundBody;
 }
 
-// Load map decorations
-export function loadMapDecorations(mapId, gameState) {
-  const { scene, renderer, camera } = gameState;
+// Function to load map decorations
+export function loadMapDecorations(mapId = "map1", scene, renderer, camera) {
   const loader = new GLTFLoader();
   
   loader.load(
@@ -179,22 +181,24 @@ export function loadMapDecorations(mapId, gameState) {
     (gltf) => {
       const decorations = gltf.scene;
       
-      // Scale to match track
+      // Scale to match track scale
       decorations.scale.set(8, 8, 8);
       decorations.position.set(0, 0, 0);
       
-      // Process materials for lighting
+      // Important: Process all materials in the decoration model
       const materials = new Set();
       
       decorations.traverse((node) => {
         if (node.isMesh) {
+          // Critical: Clone materials to ensure unique instances
           if (node.material) {
+            // Add to set to track unique materials
             materials.add(node.material);
             
-            // Clone material to ensure unique instance
+            // Create a new instance of the material
             node.material = node.material.clone();
             
-            // Enhance properties
+            // Enhance material properties
             node.material.roughness = 0.7;
             node.material.metalness = 0.2;
             node.material.needsUpdate = true;
@@ -206,10 +210,12 @@ export function loadMapDecorations(mapId, gameState) {
         }
       });
       
+      console.log(`Processed ${materials.size} unique materials in decorations`);
+      
       // Add to scene
       scene.add(decorations);
       
-      // Force renderer update
+      // Force a renderer update to ensure materials are processed
       if (renderer && camera) {
         renderer.renderLists.dispose();
         renderer.render(scene, camera);
@@ -222,4 +228,24 @@ export function loadMapDecorations(mapId, gameState) {
       console.error(`Error loading map decorations for ${mapId}:`, error);
     }
   );
+}
+
+// Export checkGroundCollision to be used from main.js
+export function checkGroundCollision(ammo, carBody, resetFunction) {
+  // Get the car's position
+  if (!carBody) return;
+  
+  const transform = new ammo.btTransform();
+  const motionState = carBody.getMotionState();
+  motionState.getWorldTransform(transform);
+  const position = transform.getOrigin();
+  
+  // If car is below certain height, reset it
+  if (position.y() < -8) {
+    console.log("Car fell off track - resetting position");
+    if (resetFunction) resetFunction(ammo);
+  }
+  
+  // Clean up
+  ammo.destroy(transform);
 }

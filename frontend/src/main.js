@@ -4,6 +4,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import "./style.css";
 import Ammo from './lib/ammo.js';
 import Peer from 'peerjs';
+import { createVehicle, updateSteering, resetCarPosition, updateCarPosition } from './modules/car.js';
+import { loadTrackModel, loadMapDecorations, checkGroundCollision } from './modules/track.js';
 
 // Check for game config from lobby
 let gameConfig = null;
@@ -107,6 +109,7 @@ let currentGateQuaternion = new THREE.Quaternion();
 
 // Initialize everything
 function init() {
+  console.log("Main module loaded");
   const loadingEl = document.createElement('div');
   loadingEl.style.position = 'absolute';
   loadingEl.style.left = '0';
@@ -147,8 +150,10 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
   
+  console.log("About to initialize Ammo.js");
   // Initialize Ammo.js and setup physics
   Ammo().then(ammo => {
+    console.log("Ammo.js initialized");
     window.Ammo = ammo;
     
     document.body.removeChild(loadingEl);
@@ -156,23 +161,48 @@ function init() {
     initPhysics(ammo);
     
     // Load the track as a single model
-    loadTrackModel(ammo, "map1");
+    loadTrackModel(ammo, "map1", scene, physicsWorld);
     
     // Load map decorations
-    loadMapDecorations("map1");
+    loadMapDecorations("map1", scene, renderer, camera);
     
     // Load gates - add this line
     loadGates("map1");
     
-    // Now create the vehicle
-    createVehicle(ammo);
+    console.log("About to create vehicle physics");
+
+    // First create just the physics body, don't set global variables yet
+    const carComponents = createVehicle(ammo, scene, physicsWorld, debugObjects, (loadedComponents) => {
+      // This callback runs when the car model is FULLY loaded
+      console.log("Car fully loaded callback - setting global variables now");
+      
+      // Now set all the global variables
+      carBody = loadedComponents.carBody;
+      vehicle = loadedComponents.vehicle;
+      wheelMeshes = loadedComponents.wheelMeshes;
+      carModel = loadedComponents.carModel;
+      currentSteeringAngle = loadedComponents.currentSteeringAngle;
+      
+      console.log("Car model loaded and global variables set:", carModel);
+      
+      // Now that the car is fully loaded, we can start the animation loop
+      animate();
+    });
+    
+    // Set physics body immediately for physics to work
+    carBody = carComponents.carBody;
+    vehicle = carComponents.vehicle;
+    
+    // Don't set carModel or wheelMeshes yet
+    // Don't start animation loop yet
+    
+    // Set up controls early so they work when the car loads
     setupKeyControls();
     
     // Initialize peer connection for multiplayer
     initPeerConnection();
     
-    // Start animation loop
-    animate();
+    // Animation will start in the callback when the car is fully loaded
   });
 }
 
@@ -192,298 +222,6 @@ function initPhysics(ammo) {
   tmpTrans = new ammo.btTransform();
 }
 
-// Create vehicle with wheel physics
-function createVehicle(ammo) {
-  // Create chassis physics body
-  const chassisShape = new ammo.btBoxShape(
-    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2, VEHICLE_LENGTH/2)
-  );
-  
-  const chassisTransform = new ammo.btTransform();
-  chassisTransform.setIdentity();
-  chassisTransform.setOrigin(new ammo.btVector3(0, 5, 0));
-  
-  const chassisMotionState = new ammo.btDefaultMotionState(chassisTransform);
-  const chassisMass = 800;
-  const localInertia = new ammo.btVector3(0, 0, 0);
-  chassisShape.calculateLocalInertia(chassisMass, localInertia);
-  
-  const chassisRbInfo = new ammo.btRigidBodyConstructionInfo(
-    chassisMass, chassisMotionState, chassisShape, localInertia
-  );
-  
-  carBody = new ammo.btRigidBody(chassisRbInfo);
-  carBody.setActivationState(4); // DISABLE_DEACTIVATION
-  physicsWorld.addRigidBody(carBody);
-  
-  // Create vehicle raycaster
-  const tuning = new ammo.btVehicleTuning();
-  const vehicleRaycaster = new ammo.btDefaultVehicleRaycaster(physicsWorld);
-  vehicle = new ammo.btRaycastVehicle(tuning, carBody, vehicleRaycaster);
-  
-  // Configure vehicle
-  vehicle.setCoordinateSystem(0, 1, 2); // X=right, Y=up, Z=forward
-  physicsWorld.addAction(vehicle);
-  
-  // Wheel directions and axles
-  const wheelDirCS = new ammo.btVector3(0, -1, 0); // Down
-  const wheelAxleCS = new ammo.btVector3(-1, 0, 0); // Left
-  
-  // Add all four wheels
-  const wheelPositions = [
-    { x: -WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Front left
-    { x: WHEEL_X_OFFSET, y: 0.3, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  // Front right
-    { x: -WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, // Back left
-    { x: WHEEL_X_OFFSET, y: 0.3, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  // Back right
-  ];
-  
-  // Create wheels with physics (but without visuals yet)
-  for (let i = 0; i < wheelPositions.length; i++) {
-    const pos = wheelPositions[i];
-    const isFront = i < 2; // First two are front wheels
-    
-    // Connect wheel to vehicle
-    const connectionPoint = new ammo.btVector3(pos.x, pos.y, pos.z);
-    vehicle.addWheel(
-      connectionPoint,
-      wheelDirCS,
-      wheelAxleCS,
-      SUSPENSION_REST_LENGTH,
-      WHEEL_RADIUS,
-      tuning,
-      isFront
-    );
-    
-    // Configure wheel
-    const wheelInfo = vehicle.getWheelInfo(i);
-    wheelInfo.set_m_suspensionStiffness(SUSPENSION_STIFFNESS);
-    wheelInfo.set_m_wheelsDampingRelaxation(SUSPENSION_DAMPING);
-    wheelInfo.set_m_wheelsDampingCompression(SUSPENSION_COMPRESSION);
-    wheelInfo.set_m_frictionSlip(WHEEL_FRICTION);
-    wheelInfo.set_m_rollInfluence(ROLL_INFLUENCE);
-    
-    // Add a placeholder for the wheel mesh
-    wheelMeshes.push(null);
-  }
-  
-  // Create debug visualization for chassis
-  createChassisDebugVisual(ammo);
-  
-  // Load the car model
-  loadCarModel(ammo, wheelPositions);
-}
-
-// Function to load the car model
-function loadCarModel(ammo, wheelPositions) {
-  const loader = new GLTFLoader();
-  
-  // Get the player ID
-  const myPlayerId = localStorage.getItem('myPlayerId');
-  
-  // Determine car color with proper priority:
-  let carColor = 'red';
-  
-  // Try getting from gameConfig first in multiplayer mode
-  if (gameConfig && gameConfig.players) {
-    const playerInfo = gameConfig.players.find(p => p.id === myPlayerId);
-    if (playerInfo && playerInfo.playerColor) {
-      carColor = playerInfo.playerColor;
-      console.log(`Using car color from gameConfig: ${carColor}`);
-    }
-  }
-  
-  // Fall back to sessionStorage if not found in gameConfig
-  if (carColor === 'red') {
-    const storedColor = sessionStorage.getItem('carColor');
-    if (storedColor) {
-      carColor = storedColor;
-      console.log(`Using car color from sessionStorage: ${carColor}`);
-    } else {
-      console.log('Using default red color');
-    }
-  }
-  
-  // Load the appropriate colored car model
-  loader.load(
-    `/models/car_${carColor}.glb`,
-    (gltf) => {
-      carModel = gltf.scene;
-      
-      // Adjust model scale and position if needed
-      carModel.scale.set(4, 4, 4); // Adjust scale as needed
-      carModel.position.set(0, 0, 0); // Position will be updated by physics
-      
-      // Make sure car casts shadows
-      carModel.traverse((node) => {
-        if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = false;
-        }
-      });
-      
-      // Find wheel meshes in the car model
-      let wheelMeshFL = carModel.getObjectByName('wheel-fr');
-      let wheelMeshFR = carModel.getObjectByName('wheel-fl');
-      let wheelMeshBL = carModel.getObjectByName('wheel-br');
-      let wheelMeshBR = carModel.getObjectByName('wheel-bl');
-
-      
-      const wheelModelMeshes = [wheelMeshFL, wheelMeshFR, wheelMeshBL, wheelMeshBR];
-      
-      // Store reference to wheel meshes and detach them from car model
-      for (let i = 0; i < wheelModelMeshes.length; i++) {
-        if (wheelModelMeshes[i]) {
-          // Get the original world matrix before removal to preserve transformations
-          wheelModelMeshes[i].updateMatrixWorld(true);
-          
-          // Remove from car model
-          carModel.remove(wheelModelMeshes[i]);
-          
-          // Add directly to scene so we can control it separately
-          scene.add(wheelModelMeshes[i]);
-          
-          // Apply the same scale as the car model
-          wheelModelMeshes[i].scale.set(4, 4, 4);
-          
-          // Save reference
-          wheelMeshes[i] = wheelModelMeshes[i];
-          
-          console.log(`Found and set up wheel: ${wheelPositions[i].name}`);
-        } else {
-          console.warn(`Could not find wheel mesh: ${wheelPositions[i].name}`);
-          
-          // Create a default wheel as fallback
-          const wheelGeometry = new THREE.CylinderGeometry(
-            WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 24
-          );
-          wheelGeometry.rotateZ(Math.PI/2); // Align with X axis
-          
-          const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
-          const wheelMesh = new THREE.Mesh(wheelGeometry, wheelMaterial);
-          wheelMesh.castShadow = true;
-          scene.add(wheelMesh);
-          
-          // Scale the default wheel to match too
-          wheelMesh.scale.set(4, 4, 4);
-          
-          // Use this default wheel
-          wheelMeshes[i] = wheelMesh;
-        }
-      }
-      
-      // Add car model to scene
-      scene.add(carModel);
-            
-      // Store reference to update visual position
-      rigidBodies.push({ mesh: carModel, body: carBody });
-      
-      console.log('Car model loaded successfully');
-    },
-    undefined,
-    (error) => {
-      console.error(`Error loading ${carColor} car model:`, error);
-      // Fallback to red model if the requested color fails to load
-      if (carColor !== 'red') {
-        console.log('Falling back to red car model');
-        loader.load(
-          '/models/car_red.glb',
-          (gltf) => {
-            carModel = gltf.scene;
-            
-            // Adjust model scale and position if needed
-            carModel.scale.set(4, 4, 4); // Adjust scale as needed
-            carModel.position.set(0, 0, 0); // Position will be updated by physics
-            
-            // Make sure car casts shadows
-            carModel.traverse((node) => {
-              if (node.isMesh) {
-                node.castShadow = true;
-                node.receiveShadow = false;
-              }
-            });
-            
-            // Find wheel meshes in the car model
-            let wheelMeshFL = carModel.getObjectByName('wheel-fr');
-            let wheelMeshFR = carModel.getObjectByName('wheel-fl');
-            let wheelMeshBL = carModel.getObjectByName('wheel-br');
-            let wheelMeshBR = carModel.getObjectByName('wheel-bl');
-
-            
-            const wheelModelMeshes = [wheelMeshFL, wheelMeshFR, wheelMeshBL, wheelMeshBR];
-            
-            // Store reference to wheel meshes and detach them from car model
-            for (let i = 0; i < wheelModelMeshes.length; i++) {
-              if (wheelModelMeshes[i]) {
-                // Get the original world matrix before removal to preserve transformations
-                wheelModelMeshes[i].updateMatrixWorld(true);
-                
-                // Remove from car model
-                carModel.remove(wheelModelMeshes[i]);
-                
-                // Add directly to scene so we can control it separately
-                scene.add(wheelModelMeshes[i]);
-                
-                // Apply the same scale as the car model
-                wheelModelMeshes[i].scale.set(4, 4, 4);
-                
-                // Save reference
-                wheelMeshes[i] = wheelModelMeshes[i];
-                
-                console.log(`Found and set up wheel: ${wheelPositions[i].name}`);
-              } else {
-                console.warn(`Could not find wheel mesh: ${wheelPositions[i].name}`);
-                
-                // Create a default wheel as fallback
-                const wheelGeometry = new THREE.CylinderGeometry(
-                  WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 24
-                );
-                wheelGeometry.rotateZ(Math.PI/2); // Align with X axis
-                
-                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
-                const wheelMesh = new THREE.Mesh(wheelGeometry, wheelMaterial);
-                wheelMesh.castShadow = true;
-                scene.add(wheelMesh);
-                
-                // Scale the default wheel to match too
-                wheelMesh.scale.set(4, 4, 4);
-                
-                // Use this default wheel
-                wheelMeshes[i] = wheelMesh;
-              }
-            }
-            
-            // Add car model to scene
-            scene.add(carModel);
-                  
-            // Store reference to update visual position
-            rigidBodies.push({ mesh: carModel, body: carBody });
-            
-            console.log('Car model loaded successfully');
-          },
-          undefined,
-          (error) => {
-            console.error('Error loading fallback red car model:', error);
-          }
-        );
-      }
-    }
-  );
-}
-
-// Create debug visualization for the chassis
-function createChassisDebugVisual(ammo) {
-  const boxGeometry = new THREE.BoxGeometry(VEHICLE_WIDTH, VEHICLE_HEIGHT, VEHICLE_LENGTH);
-  const boxMaterial = new THREE.MeshBasicMaterial({
-    color: 0xff0000,
-    wireframe: true,
-    opacity: 0.7,
-    transparent: true
-  });
-  const chassisDebug = new THREE.Mesh(boxGeometry, boxMaterial);
-  scene.add(chassisDebug);
-  debugObjects.push({ mesh: chassisDebug, body: carBody, isWheel: false });
-}
-
 // Setup key controls for vehicle
 function setupKeyControls() {
   document.addEventListener('keydown', (event) => {
@@ -494,7 +232,7 @@ function setupKeyControls() {
 
     if (event.key.toLowerCase() === 'r') {
       if (window.Ammo && carBody) {
-        resetCarPosition(window.Ammo);
+        currentSteeringAngle = resetCarPosition(window.Ammo, carBody, vehicle, currentSteeringAngle, currentGatePosition, currentGateQuaternion);
       }
     }
   });
@@ -514,7 +252,7 @@ function updatePhysics(deltaTime, ammo) {
   if (!vehicle || !carModel) return;
   
   // Update steering with time-based gradual changes
-  updateSteering(deltaTime);
+  currentSteeringAngle = updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle);
   
   // Get current velocity to determine if we're moving forward or backward
   const velocity = carBody.getLinearVelocity();
@@ -592,21 +330,7 @@ function updatePhysics(deltaTime, ammo) {
   carVisual.quaternion.set(quaternion.x(), quaternion.y(), quaternion.z(), quaternion.w());
   
   // Update wheel transforms
-  for (let i = 0; i < vehicle.getNumWheels(); i++) {
-    // Sync wheels with physics
-    vehicle.updateWheelTransform(i, true);
-    const transform = vehicle.getWheelInfo(i).get_m_worldTransform();
-    const wheelPosition = transform.getOrigin();
-    const wheelQuaternion = transform.getRotation();
-    
-    wheelMeshes[i].position.set(wheelPosition.x(), wheelPosition.y(), wheelPosition.z());
-    wheelMeshes[i].quaternion.set(
-      wheelQuaternion.x(), 
-      wheelQuaternion.y(), 
-      wheelQuaternion.z(), 
-      wheelQuaternion.w()
-    );
-  }
+  updateCarPosition(ammo, vehicle, carModel, wheelMeshes);
   
   // Update debug visuals
   debugObjects.forEach((obj, index) => {
@@ -636,7 +360,9 @@ function updatePhysics(deltaTime, ammo) {
   sendCarData();
   
   // Check for collision with ground respawn plane
-  checkGroundCollision(ammo);
+  checkGroundCollision(ammo, carBody, () => {
+    currentSteeringAngle = resetCarPosition(ammo, carBody, vehicle, currentSteeringAngle, currentGatePosition, currentGateQuaternion);
+  });
 }
 
 // Add this new camera update function
@@ -664,146 +390,6 @@ function updateCamera() {
     carDirection.clone().multiplyScalar(CAMERA_LOOK_AHEAD)
   );
   camera.lookAt(lookAtPos);
-}
-
-// New function to load the entire track from a single model file
-function loadTrackModel(ammo, mapId = "map1") {
-  const loader = new GLTFLoader();
-  
-  loader.load(
-    `/models/maps/${mapId}/track.glb`,
-    (gltf) => {
-      const track = gltf.scene;
-      
-      // Scale to match the world scale
-      track.scale.set(8, 8, 8);
-      
-      // Position at origin
-      track.position.set(0, 0, 0);
-      track.rotation.set(0, 0, 0);
-      
-      // Make sure track casts and receives shadows
-      track.traverse((node) => {
-        if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = true; // Enable for better lighting
-          
-          // Enhance track materials
-          if (node.material) {
-            node.material.roughness = 0.7;
-            node.material.metalness = 0.3;
-          }
-        }
-      });
-      
-      // Add to scene
-      scene.add(track);
-      console.log(`Map ${mapId} track loaded successfully`);
-      
-      // Add physics collider for the track
-      addTrackCollider(track, ammo);
-    },
-    (xhr) => {
-      console.log(`Loading track: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
-    },
-    (error) => {
-      console.error(`Error loading track for ${mapId}:`, error);
-    }
-  );
-}
-
-// Function to create a physics collider for the entire track
-function addTrackCollider(trackModel, ammo) {
-  // Extract all mesh geometries from the track
-  let vertices = [];
-  let indices = [];
-  let indexOffset = 0;
-  
-  // Update world matrix to apply all transformations
-  trackModel.updateMatrixWorld(true);
-  
-  // Traverse all meshes in the track model
-  trackModel.traverse(child => {
-    if (child.isMesh && child.geometry) {
-      // Get vertices
-      const positionAttr = child.geometry.getAttribute('position');
-      const vertexCount = positionAttr.count;
-      
-      // Apply mesh's transform to vertices
-      const worldMatrix = child.matrixWorld;
-      
-      // Extract vertices with transformation
-      for (let i = 0; i < vertexCount; i++) {
-        const vertex = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
-        vertex.applyMatrix4(worldMatrix);
-        
-        vertices.push(vertex.x, vertex.y, vertex.z);
-      }
-      
-      // Get indices - if they exist
-      if (child.geometry.index) {
-        const indices32 = child.geometry.index.array;
-        for (let i = 0; i < indices32.length; i++) {
-          indices.push(indices32[i] + indexOffset);
-        }
-      } else {
-        // No indices - assume vertices are already arranged as triangles
-        for (let i = 0; i < vertexCount; i++) {
-          indices.push(i + indexOffset);
-        }
-      }
-      
-      indexOffset += vertexCount;
-    }
-  });
-  
-  // Create Ammo triangle mesh
-  const triangleMesh = new ammo.btTriangleMesh();
-  
-  // Add all triangles to the mesh
-  for (let i = 0; i < indices.length; i += 3) {
-    const i1 = indices[i] * 3;
-    const i2 = indices[i+1] * 3;
-    const i3 = indices[i+2] * 3;
-    
-    const v1 = new ammo.btVector3(vertices[i1], vertices[i1+1], vertices[i1+2]);
-    const v2 = new ammo.btVector3(vertices[i2], vertices[i2+1], vertices[i2+2]);
-    const v3 = new ammo.btVector3(vertices[i3], vertices[i3+1], vertices[i3+2]);
-    
-    triangleMesh.addTriangle(v1, v2, v3, false);
-    
-    // Clean up Ammo vectors
-    ammo.destroy(v1);
-    ammo.destroy(v2);
-    ammo.destroy(v3);
-  }
-  
-  // Create track collision shape using triangle mesh
-  const trackShape = new ammo.btBvhTriangleMeshShape(triangleMesh, true, true);
-  
-  // The rigid body uses identity transform since all transformations are in the vertices
-  const trackTransform = new ammo.btTransform();
-  trackTransform.setIdentity();
-  
-  // Create motion state
-  const motionState = new ammo.btDefaultMotionState(trackTransform);
-  
-  // Set up track rigid body (static - mass = 0)
-  const mass = 0;
-  const localInertia = new ammo.btVector3(0, 0, 0);
-  
-  // Create rigid body
-  const rbInfo = new ammo.btRigidBodyConstructionInfo(
-    mass, motionState, trackShape, localInertia
-  );
-  
-  const trackBody = new ammo.btRigidBody(rbInfo);
-  trackBody.setFriction(0.8); // Track should have good grip
-  
-  // Add to physics world
-  physicsWorld.addRigidBody(trackBody);
-  
-  console.log("Track physics collider created successfully");
 }
 
 // Replace your physics update in animate() with this
@@ -834,95 +420,6 @@ function animate() {
   }
   
   renderer.render(scene, camera);
-}
-
-// New function for steering logic
-function updateSteering(deltaTime) {
-  // Calculate target steering angle based on key state
-  let targetSteeringAngle = 0;
-  
-  if (keyState.a) {
-    targetSteeringAngle = MAX_STEERING_ANGLE; // Left
-  } else if (keyState.d) {
-    targetSteeringAngle = -MAX_STEERING_ANGLE; // Right
-  }
-  
-  // Determine appropriate steering speed
-  const steeringSpeed = (targetSteeringAngle === 0 || (currentSteeringAngle > 0 && targetSteeringAngle < 0) || (currentSteeringAngle < 0 && targetSteeringAngle > 0)) ? 
-    STEERING_RETURN_SPEED : // Return to center faster
-    STEERING_SPEED;         // Turn at normal speed
-  
-  // Smoothly interpolate current steering angle towards target
-  const steeringDelta = targetSteeringAngle - currentSteeringAngle;
-  const maxSteeringDelta = steeringSpeed * deltaTime;
-  
-  // Limit the steering change per frame
-  if (Math.abs(steeringDelta) > maxSteeringDelta) {
-    currentSteeringAngle += Math.sign(steeringDelta) * maxSteeringDelta;
-  } else {
-    currentSteeringAngle = targetSteeringAngle;
-  }
-  
-  // Apply steering to front wheels
-  for (let i = 0; i < 2; i++) {
-    vehicle.setSteeringValue(currentSteeringAngle, i);
-  }
-}
-
-// Function to load map decorations from a combined model file
-function loadMapDecorations(mapId = "map1") {
-  const loader = new GLTFLoader();
-  
-  loader.load(
-    `/models/maps/${mapId}/decorations.glb`,
-    (gltf) => {
-      const decorations = gltf.scene;
-      
-      // Scale to match track scale
-      decorations.scale.set(8, 8, 8);
-      decorations.position.set(0, 0, 0);
-      
-      // Important: Process all materials in the decoration model
-      const materials = new Set();
-      
-      decorations.traverse((node) => {
-        if (node.isMesh) {
-          // Critical: Clone materials to ensure unique instances
-          if (node.material) {
-            // Add to set to track unique materials
-            materials.add(node.material);
-            
-            // Create a new instance of the material
-            node.material = node.material.clone();
-            
-            // Enhance material properties
-            node.material.roughness = 0.7;
-            node.material.metalness = 0.2;
-            node.material.needsUpdate = true;
-            
-            // Enable shadows
-            node.castShadow = true;
-            node.receiveShadow = true;
-          }
-        }
-      });
-      
-      console.log(`Processed ${materials.size} unique materials in decorations`);
-      
-      // Add to scene
-      scene.add(decorations);
-      
-      // Force a renderer update to ensure materials are processed
-      renderer.renderLists.dispose();
-      renderer.render(scene, camera);
-      
-      console.log(`Map ${mapId} decorations loaded successfully`);
-    },
-    undefined,
-    (error) => {
-      console.error(`Error loading map decorations for ${mapId}:`, error);
-    }
-  );
 }
 
 // Enhanced lighting system - add this function
@@ -1322,65 +819,6 @@ function sendCarData() {
   });
 }
 
-// Add function to check for collisions with ground plane
-function checkGroundCollision(ammo) {
-  // Get the car's position
-  if (!carBody) return;
-  
-  const transform = new ammo.btTransform();
-  const motionState = carBody.getMotionState();
-  motionState.getWorldTransform(transform);
-  const position = transform.getOrigin();
-  
-  // If car is below certain height, reset it
-  if (position.y() < 0) {
-    console.log("Car fell off track - resetting position");
-    resetCarPosition(ammo);
-  }
-  
-  // Clean up
-  ammo.destroy(transform);
-}
-
-// Add function to reset car position
-function resetCarPosition(ammo) {
-  // Cancel all movement
-  const zero = new ammo.btVector3(0, 0, 0);
-  carBody.setLinearVelocity(zero);
-  carBody.setAngularVelocity(zero);
-  
-  // Reset position transform
-  const resetTransform = new ammo.btTransform();
-  resetTransform.setIdentity();
-  resetTransform.setOrigin(new ammo.btVector3(currentGatePosition.x, currentGatePosition.y + 2, currentGatePosition.z)); 
-  const rotQuat = new ammo.btQuaternion(
-    currentGateQuaternion.x,
-    currentGateQuaternion.y,
-    currentGateQuaternion.z,
-    currentGateQuaternion.w
-  );
-  resetTransform.setRotation(rotQuat);
-  
-  // Apply transform
-  carBody.setWorldTransform(resetTransform);
-  carBody.getMotionState().setWorldTransform(resetTransform);
-  
-  // Reset steering
-  currentSteeringAngle = 0;
-  for (let i = 0; i < vehicle.getNumWheels(); i++) {
-    if (i < 2) { // Front wheels only
-      vehicle.setSteeringValue(0, i);
-    }
-    
-    // Reset wheel rotation and position
-    vehicle.updateWheelTransform(i, true);
-  }
-  
-  // Clean up
-  ammo.destroy(zero);
-  ammo.destroy(resetTransform);
-}
-
 // Function to initiate gate fade-in
 function startGateFadeIn(gateIndex) {
   if (gateIndex >= gates.length) return;
@@ -1601,7 +1039,7 @@ function resetRace() {
   
   // Reset car position
   if (window.Ammo && carBody) {
-    resetCarPosition(window.Ammo);
+    currentSteeringAngle = resetCarPosition(window.Ammo, carBody, vehicle, currentSteeringAngle, currentGatePosition, currentGateQuaternion);
   }
 }
 
