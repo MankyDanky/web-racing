@@ -186,7 +186,7 @@ function initPhysics(ammo) {
   
   // Create physics world
   physicsWorld = new ammo.btDiscreteDynamicsWorld(dispatcher, broadphase, solver, collisionConfig);
-  physicsWorld.setGravity(new ammo.btVector3(0, -10, 0));
+  physicsWorld.setGravity(new ammo.btVector3(0, -20, 0));
   
   // Create temporary transform for reuse
   tmpTrans = new ammo.btTransform();
