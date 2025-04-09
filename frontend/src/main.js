@@ -96,6 +96,14 @@ let opponentCarData = {
 };
 let opponentCars = {};
 
+// Add these globals at the top with your other global variables
+let gates = [];
+let currentGateIndex = 0;
+let totalGates = 8; // 7 numbered gates + finish
+let fadingGates = {};
+const GATE_FADE_DURATION = 1.0; // Duration of fade in seconds
+let _tempVector1 = new THREE.Vector3();
+
 // Initialize everything
 function init() {
   const loadingEl = document.createElement('div');
@@ -157,6 +165,9 @@ function init() {
     
     // Load map decorations
     loadMapDecorations("map1");
+    
+    // Load gates - add this line
+    loadGates("map1");
     
     // Now create the vehicle
     createVehicle(ammo);
@@ -1099,10 +1110,11 @@ function animate() {
       updatePhysics(FIXED_PHYSICS_STEP, window.Ammo);
       accumulator -= FIXED_PHYSICS_STEP;
       updateCamera();
+      checkGateProximity(); // Add this line inside the physics step
     }
     
-    
     updateMarkers();
+    updateGateFading(); // Add this line for gate fade effect
     
     // Send car data as before
     if (Math.random() < 0.2) {
@@ -1637,6 +1649,229 @@ function resetCarPosition(ammo) {
   // Clean up
   ammo.destroy(zero);
   ammo.destroy(resetTransform);
+}
+
+// Function to initiate gate fade-in
+function startGateFadeIn(gateIndex) {
+  if (gateIndex >= gates.length) return;
+  
+  const gate = gates[gateIndex];
+  if (!gate) return;
+  
+  // Make sure gate is visible
+  gate.visible = true;
+  
+  // Reset opacity to 0
+  gate.traverse(child => {
+    if (child.isMesh) {
+      child.material.opacity = 0;
+    }
+  });
+  
+  // Add to fading gates
+  fadingGates[gateIndex] = {
+    gate: gate,
+    startTime: Date.now(),
+    duration: GATE_FADE_DURATION * 1000
+  };
+}
+
+// Function to update gate fading
+function updateGateFading() {
+  const currentTime = Date.now();
+  
+  Object.entries(fadingGates).forEach(([index, fadeData]) => {
+    const { gate, startTime, duration } = fadeData;
+    const elapsed = currentTime - startTime;
+    
+    if (elapsed >= duration) {
+      // Fading complete
+      gate.traverse(child => {
+        if (child.isMesh) {
+          child.material.opacity = 1.0;
+        }
+      });
+      
+      // Remove from fading gates
+      delete fadingGates[index];
+    } else {
+      // Calculate opacity based on elapsed time (0 to 1)
+      const opacity = elapsed / duration;
+      
+      // Update all materials in the gate
+      gate.traverse(child => {
+        if (child.isMesh) {
+          child.material.opacity = opacity;
+        }
+      });
+    }
+  });
+}
+
+// Function to load gates model
+function loadGates(mapId = "map1") {
+  const loader = new GLTFLoader();
+  
+  loader.load(
+    `/models/maps/${mapId}/gates.glb`,
+    (gltf) => {
+      const gatesModel = gltf.scene;
+      
+      // Scale to match the world scale
+      gatesModel.scale.set(8, 8, 8);
+      
+      // Find all numbered gates
+      for (let i = 0; i < 7; i++) {
+        const gate = gatesModel.getObjectByName(`gate-${i}`);
+        if (gate) {
+          // Initialize gate properties
+          gate.userData.index = i;
+          gate.userData.passed = false;
+          
+          // Only first gate is visible initially
+          gate.visible = (i === 0);
+          
+          // Make materials transparent for fade effect
+          gate.traverse(child => {
+            if (child.isMesh) {
+              child.material = child.material.clone();
+              child.material.transparent = true;
+              child.material.opacity = i === 0 ? 0 : 1;
+            }
+          });
+          
+          gates.push(gate);
+          console.log(`Loaded gate-${i}, visible: ${gate.visible}`);
+        } else {
+          console.warn(`Could not find gate-${i}`);
+        }
+      }
+      
+      // Add finish gate
+      const finishGate = gatesModel.getObjectByName('gate-finish');
+      if (finishGate) {
+        finishGate.userData.index = 7;
+        finishGate.userData.passed = false;
+        finishGate.userData.isFinish = true;
+        finishGate.visible = false;
+        
+        finishGate.traverse(child => {
+          if (child.isMesh) {
+            child.material = child.material.clone();
+            child.material.transparent = true;
+            child.material.opacity = 0;
+          }
+        });
+        
+        gates.push(finishGate);
+        console.log('Loaded gate-finish (initially hidden)');
+      } else {
+        console.warn('Could not find gate-finish');
+      }
+      
+      // Add to scene
+      scene.add(gatesModel);
+      console.log(`Loaded ${gates.length} gates successfully`);
+      
+      // Start fade-in for first gate
+      startGateFadeIn(0);
+    },
+    undefined,
+    (error) => {
+      console.error(`Error loading gates for ${mapId}:`, error);
+    }
+  );
+}
+
+// Optimized function to check if player is near gates
+function checkGateProximity() {
+  if (!carModel || gates.length === 0 || currentGateIndex >= gates.length) return;
+  
+  const gate = gates[currentGateIndex];
+  if (!gate || gate.userData.passed) return;
+  
+  // Get gate position in world space - reuse existing vector
+  gate.getWorldPosition(_tempVector1);
+  const gatePos = _tempVector1;
+  
+  // Calculate distance squared (avoid expensive sqrt)
+  const dx = carModel.position.x - gatePos.x;
+  const dy = carModel.position.y - gatePos.y;
+  const dz = carModel.position.z - gatePos.z;
+  const distanceSquared = dx * dx + dy * dy + dz * dz;
+  
+  // Compare with threshold squared (2 units * 8 scale factor)^2 = 256
+  if (distanceSquared < 256) {
+    console.log(`Passed through gate-${currentGateIndex === 7 ? 'finish' : currentGateIndex}`);
+    
+    // Mark gate as passed
+    gate.userData.passed = true;
+    
+    // If this is the finish gate
+    if (gate.userData.isFinish) {
+      showFinishMessage();
+    } else {
+      // Move to next gate
+      currentGateIndex++;
+      
+      // Make next gate visible and start fade-in
+      if (currentGateIndex < gates.length) {
+        startGateFadeIn(currentGateIndex);
+      }
+    }
+  }
+}
+
+// Function to show finish message
+function showFinishMessage() {
+  // Create finish message UI
+  const finishUI = document.createElement('div');
+  finishUI.style.position = 'absolute';
+  finishUI.style.top = '50%';
+  finishUI.style.left = '50%';
+  finishUI.style.transform = 'translate(-50%, -50%)';
+  finishUI.style.background = 'rgba(0, 0, 0, 0.8)';
+  finishUI.style.color = '#4dc9ff';
+  finishUI.style.padding = '20px';
+  finishUI.style.borderRadius = '10px';
+  finishUI.style.fontFamily = "'Exo 2', sans-serif";
+  finishUI.style.fontSize = '24px';
+  finishUI.style.textAlign = 'center';
+  finishUI.style.zIndex = '1000';
+  finishUI.innerHTML = `
+    <h2>Race Complete!</h2>
+    <p>You passed through all ${totalGates} gates!</p>
+    <button id="restart-btn" style="background: #4dc9ff; border: none; padding: 10px 20px; 
+    border-radius: 5px; color: black; font-weight: bold; cursor: pointer;">Restart Race</button>
+  `;
+  document.body.appendChild(finishUI);
+  
+  // Add restart button event listener
+  document.getElementById('restart-btn').addEventListener('click', () => {
+    resetRace();
+    document.body.removeChild(finishUI);
+  });
+}
+
+// Function to reset race
+function resetRace() {
+  // Reset gate states
+  gates.forEach((gate, index) => {
+    gate.userData.passed = false;
+    gate.visible = (index === 0);
+  });
+  
+  // Reset counters
+  currentGateIndex = 0;
+  gatesPassed = 0;
+  
+  // Start fade-in for first gate
+  startGateFadeIn(0);
+  
+  // Reset car position
+  if (window.Ammo && carBody) {
+    resetCarPosition(window.Ammo);
+  }
 }
 
 // Start initialization
