@@ -623,6 +623,9 @@ function updatePhysics(deltaTime, ammo) {
   
   // Send car data to connected peer
   sendCarData();
+  
+  // Check for collision with ground respawn plane
+  checkGroundCollision(ammo);
 }
 
 // Add this new camera update function
@@ -1081,18 +1084,28 @@ function addTrackCollider(trackModel, ammo) {
   console.log("Track physics collider created successfully");
 }
 
-// Modify animate function to use our camera system instead of OrbitControls
+// Replace your physics update in animate() with this
+const FIXED_PHYSICS_STEP = 1/60; // 60Hz physics
+let accumulator = 0;
+
 function animate() {
   requestAnimationFrame(animate);
-  const deltaTime = Math.min(clock.getDelta(), 0.05);
+  const deltaTime = Math.min(clock.getDelta(), 0.1);
+  accumulator += deltaTime;
   
   if (physicsWorld) {
-    updatePhysics(deltaTime, window.Ammo);
-    updateCamera(); // Add this line to update the camera each frame
-    updateMarkers(); // Add this to update player markers
+    // Run physics at fixed intervals
+    while (accumulator >= FIXED_PHYSICS_STEP) {
+      updatePhysics(FIXED_PHYSICS_STEP, window.Ammo);
+      accumulator -= FIXED_PHYSICS_STEP;
+      updateCamera();
+    }
     
-    // Send car data every few frames to reduce bandwidth
-    if (Math.random() < 0.2) { // ~20% chance each frame, or about 12 updates per second
+    
+    updateMarkers();
+    
+    // Send car data as before
+    if (Math.random() < 0.2) {
       sendCarData();
     }
   }
@@ -1572,6 +1585,58 @@ function sendCarData() {
       console.error('Error sending car data:', err);
     }
   });
+}
+
+// Add function to check for collisions with ground plane
+function checkGroundCollision(ammo) {
+  // Get the car's position
+  if (!carBody) return;
+  
+  const transform = new ammo.btTransform();
+  const motionState = carBody.getMotionState();
+  motionState.getWorldTransform(transform);
+  const position = transform.getOrigin();
+  
+  // If car is below certain height, reset it
+  if (position.y() < 0) {
+    console.log("Car fell off track - resetting position");
+    resetCarPosition(ammo);
+  }
+  
+  // Clean up
+  ammo.destroy(transform);
+}
+
+// Add function to reset car position
+function resetCarPosition(ammo) {
+  // Cancel all movement
+  const zero = new ammo.btVector3(0, 0, 0);
+  carBody.setLinearVelocity(zero);
+  carBody.setAngularVelocity(zero);
+  
+  // Reset position transform
+  const resetTransform = new ammo.btTransform();
+  resetTransform.setIdentity();
+  resetTransform.setOrigin(new ammo.btVector3(0, 5, 0)); // Start position, a bit above ground
+  
+  // Apply transform
+  carBody.setWorldTransform(resetTransform);
+  carBody.getMotionState().setWorldTransform(resetTransform);
+  
+  // Reset steering
+  currentSteeringAngle = 0;
+  for (let i = 0; i < vehicle.getNumWheels(); i++) {
+    if (i < 2) { // Front wheels only
+      vehicle.setSteeringValue(0, i);
+    }
+    
+    // Reset wheel rotation and position
+    vehicle.updateWheelTransform(i, true);
+  }
+  
+  // Clean up
+  ammo.destroy(zero);
+  ammo.destroy(resetTransform);
 }
 
 // Start initialization
