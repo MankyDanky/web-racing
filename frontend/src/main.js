@@ -127,9 +127,6 @@ function init() {
   scene.background = new THREE.Color(0x66ccff);
   setupEnhancedLighting();
   
-  // Setup lighting
-  setupEnhancedLighting();
-  
   // Setup camera
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 10, 20);
@@ -286,9 +283,6 @@ function loadCarModel(ammo, wheelPositions) {
   const myPlayerId = localStorage.getItem('myPlayerId');
   
   // Determine car color with proper priority:
-  // 1. From gameConfig if in multiplayer mode
-  // 2. From sessionStorage if available
-  // 3. Default to red
   let carColor = 'red';
   
   // Try getting from gameConfig first in multiplayer mode
@@ -1169,33 +1163,45 @@ function loadMapDecorations(mapId = "map1") {
       
       // Scale to match track scale
       decorations.scale.set(8, 8, 8);
-      
-      // Position at origin
       decorations.position.set(0, 0, 0);
-      decorations.rotation.set(0, 0, 0);
       
-      // Make sure decorations cast and receive shadows
+      // Important: Process all materials in the decoration model
+      const materials = new Set();
+      
       decorations.traverse((node) => {
         if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = true; // Changed to true!
-          
-          // Enhance materials if they exist
+          // Critical: Clone materials to ensure unique instances
           if (node.material) {
-            // Ensure materials respond better to lighting
+            // Add to set to track unique materials
+            materials.add(node.material);
+            
+            // Create a new instance of the material
+            node.material = node.material.clone();
+            
+            // Enhance material properties
             node.material.roughness = 0.7;
             node.material.metalness = 0.2;
+            node.material.needsUpdate = true;
+            
+            // Enable shadows
+            node.castShadow = true;
+            node.receiveShadow = true;
           }
         }
       });
       
+      console.log(`Processed ${materials.size} unique materials in decorations`);
+      
       // Add to scene
       scene.add(decorations);
+      
+      // Force a renderer update to ensure materials are processed
+      renderer.renderLists.dispose();
+      renderer.render(scene, camera);
+      
       console.log(`Map ${mapId} decorations loaded successfully`);
     },
-    (xhr) => {
-      console.log(`Loading decorations: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
-    },
+    undefined,
     (error) => {
       console.error(`Error loading map decorations for ${mapId}:`, error);
     }
@@ -1210,23 +1216,23 @@ function setupEnhancedLighting() {
   });
   
   // Reduce ambient light intensity for better shadow definition
-  const ambientLight = new THREE.AmbientLight(0xcccccc, 0.3); // Reduced from 0.5
+  const ambientLight = new THREE.AmbientLight(0xcccccc, 1);
   scene.add(ambientLight);
   
   // Primary directional light (sun)
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1.8);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
   directionalLight.position.set(40, 80, 30);
   
   scene.add(directionalLight);
   
   // Second light with wider frustum but lower resolution for distant shadows
-  const secondaryLight = new THREE.DirectionalLight(0xffffcc, 0.6);
+  const secondaryLight = new THREE.DirectionalLight(0xffffcc, 1.2);
   secondaryLight.position.set(-30, 50, -30);
   
   scene.add(secondaryLight);
   
   // Add hemisphere light
-  const hemisphereLight = new THREE.HemisphereLight(0xaaccff, 0x70a070, 0.7); // Reduced from 1.0
+  const hemisphereLight = new THREE.HemisphereLight(0xaaccff, 0x70a070, 1); // Reduced from 1.0
   scene.add(hemisphereLight);
 }
 
