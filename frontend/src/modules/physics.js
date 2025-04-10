@@ -57,8 +57,8 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
   let engineForce = 0;
   let brakingForce = 0;
   
-  // Only allow movement if race has started or not in multiplayer
-  if (!raceState.isMultiplayer || raceState.raceStarted) {
+  // Only allow movement if race has started or countdown is complete
+  if (raceState.raceStarted) {
     // Handle key inputs with proper braking logic
     if (keyState.w) {
       // Accelerate forward
@@ -80,7 +80,7 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
       brakingForce = 20;
     }
   } else {
-    // Always apply brakes during countdown/waiting
+    // Always apply brakes during countdown for any mode
     brakingForce = maxBrakingForce;
   }
   

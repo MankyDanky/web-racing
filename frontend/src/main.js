@@ -336,6 +336,12 @@ function init() {
       // Update car reference in multiplayer state
       multiplayerState.carModel = carModel;
       
+      // For single player, start the countdown immediately
+      if (!raceState.isMultiplayer) {
+        console.log("Single player mode - starting countdown");
+        setTimeout(() => startCountdown(), 500);
+      }
+      
       // Now that the car is fully loaded, we can start the animation loop
       animate();
     });
