@@ -99,6 +99,11 @@ let raceState = {
   countdownValue: 3
 };
 
+// Timer variables
+let raceTimer;
+let raceStartTime = 0;
+let timerInterval;
+
 // Make raceState globally accessible for multiplayer.js
 window.raceState = raceState;
 
@@ -172,6 +177,86 @@ function createRaceUI() {
   window.countdownOverlay = countdownOverlay; // Add this line
 }
 
+// Create the timer UI
+function createRaceTimer() {
+  // Create timer element
+  raceTimer = document.createElement('div');
+  raceTimer.style.position = 'absolute';
+  raceTimer.style.top = '20px';
+  raceTimer.style.left = '50%';
+  raceTimer.style.transform = 'translateX(-50%)';
+  
+  // Match the styling of other UI elements
+  raceTimer.style.background = 'rgba(0, 0, 0, 0.5)';
+  raceTimer.style.color = '#fff';
+  raceTimer.style.padding = '10px 20px';
+  raceTimer.style.borderRadius = '10px';
+  raceTimer.style.fontFamily = "'Exo 2', sans-serif";
+  raceTimer.style.fontSize = '28px';
+  raceTimer.style.fontWeight = 'bold';
+  raceTimer.style.textAlign = 'center';
+  raceTimer.style.zIndex = '1000';
+  
+  // Add the box shadow and text glow like the speedometer
+  raceTimer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  raceTimer.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+  
+  raceTimer.innerText = '00:00';
+  
+  // Hide initially
+  raceTimer.style.display = 'none';
+  
+  // Add to document
+  document.body.appendChild(raceTimer);
+}
+
+// Function to start the timer
+function startRaceTimer() {
+  if (raceTimer) {
+    raceTimer.style.display = 'block';
+    raceStartTime = Date.now();
+    
+    // Clear any existing interval
+    if (timerInterval) {
+      clearInterval(timerInterval);
+    }
+    
+    // Update the timer immediately
+    updateRaceTimer();
+    
+    // Set interval to update timer every 100ms
+    timerInterval = setInterval(updateRaceTimer, 100);
+  }
+}
+
+// Function to update the timer display
+function updateRaceTimer() {
+  if (!raceTimer) return;
+  
+  const elapsedMilliseconds = Date.now() - raceStartTime;
+  const elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
+  const minutes = Math.floor(elapsedSeconds / 60);
+  const seconds = elapsedSeconds % 60;
+  
+  // Format with leading zeros
+  const formattedMinutes = String(minutes).padStart(2, '0');
+  const formattedSeconds = String(seconds).padStart(2, '0');
+  
+  raceTimer.innerText = `${formattedMinutes}:${formattedSeconds}`;
+}
+
+// Function to reset the timer
+function resetRaceTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+  }
+  
+  if (raceTimer) {
+    raceTimer.innerText = '00:00';
+    raceTimer.style.display = 'none';
+  }
+}
+
 // Update the waiting for players UI
 function updateWaitingUI() {
   if (!waitingForPlayersOverlay || !raceState.isMultiplayer) return;
@@ -236,6 +321,9 @@ function startCountdown() {
       // Set race started and log it
       raceState.raceStarted = true;
       console.log('Race started!', raceState);
+      
+      // Start the race timer
+      startRaceTimer();
       
       // Broadcast race start to other players if host
       if (isHost) {
@@ -371,6 +459,7 @@ function init() {
 
   // Later, after you've created the UI:
   createRaceUI();
+  createRaceTimer();
 }
 
 // Setup key controls for vehicle
@@ -503,6 +592,7 @@ function animate() {
               currentSteeringAngle, 
               resetCarPosition
             );
+            resetRaceTimer(); // Reset the race timer
           });
         }
         
