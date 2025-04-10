@@ -149,7 +149,6 @@ function setupMessageHandlers(conn, gameState) {
   // Handle incoming data with enhanced logging
   conn.on('data', (data) => {
     try {
-      console.log(`MESSAGE RECEIVED from ${conn.peer}:`, data);
       
       if (data.type === 'connectionTest') {
         console.log('Connection test message received!');
@@ -201,7 +200,6 @@ function setupMessageHandlers(conn, gameState) {
 function handlePlayerConnection(conn, gameState) {
   // Handle incoming data from any player
   conn.on('data', (data) => {
-    console.log('Received data from player:', conn.peer, data);
     if (data.type === 'carUpdate') {
       // Update the appropriate opponent car
       updateOpponentCarPosition(conn.peer, data);
@@ -317,7 +315,6 @@ function loadOpponentCarModel(playerId, scene) {
       nameSprite.scale.set(1, 0.25, 1);
       opponentModel.add(nameSprite); 
       
-      console.log(`Added name label for player: ${playerName} (Car color: ${playerColor})`);
       
       // Make invisible initially
       opponentModel.visible = false;
@@ -452,6 +449,39 @@ export function updateOpponentCarPosition(playerId, data) {
     data.quaternion.z,
     data.quaternion.w
   );
+  
+  // Store race progress data with detailed logging
+  if (data.raceProgress) {
+    // Log the received race progress data for debugging
+    console.log(`RACE PROGRESS DATA RECEIVED for ${data.playerName || playerId}:`, {
+      gateIndex: data.raceProgress.currentGateIndex,
+      distance: data.raceProgress.distanceToNextGate
+    });
+    
+    // Create a fresh race progress object with explicit property assignments
+    if (!opponent.raceProgress) {
+      opponent.raceProgress = {};
+    }
+    
+    // CRITICAL FIX: Explicitly assign each property rather than the whole object
+    opponent.raceProgress.currentGateIndex = Number(data.raceProgress.currentGateIndex);
+    opponent.raceProgress.distanceToNextGate = Number(data.raceProgress.distanceToNextGate);
+    
+    // Add player name and color if available
+    if (data.playerName) {
+      opponent.name = data.playerName;
+    }
+    if (data.playerColor) {
+      opponent.color = data.playerColor;
+    }
+    
+    // Force the leaderboard to update
+    setTimeout(() => {
+      if (window.updateLeaderboard) {
+        window.updateLeaderboard();
+      }
+    }, 100);
+  }
 }
 
 // Update the markers (player name labels)
@@ -467,24 +497,88 @@ export function updateMarkers() {
   });
 }
 
-// Send car position data to all connected players
+// Modify the sendCarData function to include gate progress
 export function sendCarData(gameState) {
   if (!gameState.carModel || !state.peer || state.playerConnections.length === 0) return;
   
-  // Prepare the data packet
+  // Get the current player ID
+  const myPlayerId = localStorage.getItem('myPlayerId');
+  
+  // Get player name and color from game config
+  let playerName = 'Player';
+  let playerColor = 'red';
+  
+  if (state.gameConfig && state.gameConfig.players) {
+    const playerInfo = state.gameConfig.players.find(p => p.id === myPlayerId);
+    if (playerInfo) {
+      playerName = playerInfo.name || 'Player';
+      playerColor = playerInfo.playerColor || 'red';
+    }
+  }
+  
+  // Get gate progress information from global window state
+  const gateData = window.gateData;
+  const currentGateIndex = gateData ? gateData.currentGateIndex : 0;
+  
+  // Calculate distance to next gate if possible - with safety checks
+  let distanceToNextGate = 1000000; // Use a large but safe value instead of Number.MAX_VALUE
+  
+  try {
+    if (gateData && gateData.gates && gateData.gates.length > currentGateIndex && gameState.carModel) {
+      const nextGate = gateData.gates[currentGateIndex];
+      if (nextGate) {
+        const gatePos = new THREE.Vector3();
+        nextGate.getWorldPosition(gatePos);
+        
+        // Check for valid position values
+        if (isFinite(gatePos.x) && isFinite(gatePos.y) && isFinite(gatePos.z) &&
+            isFinite(gameState.carModel.position.x) && 
+            isFinite(gameState.carModel.position.y) && 
+            isFinite(gameState.carModel.position.z)) {
+            
+          const dx = gameState.carModel.position.x - gatePos.x;
+          const dy = gameState.carModel.position.y - gatePos.y;
+          const dz = gameState.carModel.position.z - gatePos.z;
+          
+          // Calculate distance and round to avoid precision issues
+          const calculatedDistance = Math.round((dx * dx + dy * dy + dz * dz) * 100) / 100;
+          
+          if (isFinite(calculatedDistance) && !isNaN(calculatedDistance)) {
+            distanceToNextGate = Math.min(calculatedDistance, 1000000);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error calculating distance to gate:', err);
+  }
+  
+  // Ensure all position and quaternion values are valid numbers
+  const safePosition = {
+    x: isFinite(gameState.carModel.position.x) ? Number(gameState.carModel.position.x.toFixed(2)) : 0,
+    y: isFinite(gameState.carModel.position.y) ? Number(gameState.carModel.position.y.toFixed(2)) : 0,
+    z: isFinite(gameState.carModel.position.z) ? Number(gameState.carModel.position.z.toFixed(2)) : 0
+  };
+  
+  const safeQuaternion = {
+    x: isFinite(gameState.carModel.quaternion.x) ? Number(gameState.carModel.quaternion.x.toFixed(4)) : 0,
+    y: isFinite(gameState.carModel.quaternion.y) ? Number(gameState.carModel.quaternion.y.toFixed(4)) : 0,
+    z: isFinite(gameState.carModel.quaternion.z) ? Number(gameState.carModel.quaternion.z.toFixed(4)) : 0,
+    w: isFinite(gameState.carModel.quaternion.w) ? Number(gameState.carModel.quaternion.w.toFixed(4)) : 1
+  };
+  
+  // Prepare the data packet with safe values
   const carData = {
     type: 'carUpdate',
     playerId: state.peer.id,
-    position: {
-      x: gameState.carModel.position.x,
-      y: gameState.carModel.position.y,
-      z: gameState.carModel.position.z
-    },
-    quaternion: {
-      x: gameState.carModel.quaternion.x,
-      y: gameState.carModel.quaternion.y,
-      z: gameState.carModel.quaternion.z,
-      w: gameState.carModel.quaternion.w
+    playerName: playerName,
+    playerColor: playerColor,
+    position: safePosition,
+    quaternion: safeQuaternion,
+    // Add race progress data with safe values
+    raceProgress: {
+      currentGateIndex: currentGateIndex,
+      distanceToNextGate: distanceToNextGate
     }
   };
   
@@ -539,7 +633,6 @@ export function broadcastRaceStart() {
 
 // Completely revise the broadcast functions for better reliability
 export function broadcastCountdownStart() {
-  console.log(`🔴 Broadcasting countdown start to ${state.playerConnections.length} players...`);
   
   if (state.playerConnections.length === 0) {
     console.error('No player connections available for broadcasting!');
@@ -554,7 +647,6 @@ export function broadcastCountdownStart() {
           type: 'countdownStart',
           timestamp: Date.now()
         };
-        console.log(`Sending countdown to player ${index + 1}:`, conn.peer);
         conn.send(message);
         successCount++;
       } else {
@@ -565,5 +657,4 @@ export function broadcastCountdownStart() {
     }
   });
   
-  console.log(`Countdown broadcast attempted: ${successCount}/${state.playerConnections.length} successful`);
 }

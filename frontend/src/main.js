@@ -111,6 +111,10 @@ window.raceState = raceState;
 let countdownOverlay;
 let waitingForPlayersOverlay;
 
+// Add this to your global variables
+let leaderboard;
+let playerPositions = [];
+
 // Add these functions before init():
 
 // Create the waiting and countdown UI elements
@@ -209,6 +213,184 @@ function createRaceTimer() {
   // Add to document
   document.body.appendChild(raceTimer);
 }
+
+// Create the leaderboard UI
+function createLeaderboard() {
+  // Create leaderboard container
+  leaderboard = document.createElement('div');
+  leaderboard.style.position = 'absolute';
+  leaderboard.style.top = '20px';
+  leaderboard.style.left = '20px';
+  
+  // Match the styling of other UI elements
+  leaderboard.style.background = 'rgba(0, 0, 0, 0.5)';
+  leaderboard.style.color = '#fff';
+  leaderboard.style.padding = '15px';
+  leaderboard.style.borderRadius = '10px';
+  leaderboard.style.fontFamily = "'Exo 2', sans-serif";
+  leaderboard.style.fontSize = '18px';
+  leaderboard.style.fontWeight = 'bold';
+  leaderboard.style.textAlign = 'left';
+  leaderboard.style.zIndex = '1000';
+  leaderboard.style.minWidth = '220px';
+  
+  // Add the box shadow and text glow like the speedometer
+  leaderboard.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  leaderboard.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.3)';
+  
+  // Initial content
+  leaderboard.innerHTML = `
+    <div style="margin-bottom: 10px; text-align: center; font-size: 20px; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 5px;">
+      LEADERBOARD
+    </div>
+    <div id="leaderboard-positions"></div>
+  `;
+  
+  // Hide initially in single player mode
+  leaderboard.style.display = raceState.isMultiplayer ? 'block' : 'none';
+  
+  // Add to document
+  document.body.appendChild(leaderboard);
+}
+
+// Improve updateLeaderboard function with more robust data handling
+function updateLeaderboard() {
+  if (!leaderboard) return;
+  
+  const leaderboardPositions = document.getElementById('leaderboard-positions');
+  if (!leaderboardPositions) return;
+  
+  // Get all players including myself
+  playerPositions = [];
+  
+  // Add myself
+  const myPlayerId = localStorage.getItem('myPlayerId');
+  const myPlayerInfo = allPlayers.find(p => p.id === myPlayerId);
+  const myName = myPlayerInfo?.name || 'You';
+  const myColor = myPlayerInfo?.playerColor || 'blue';
+  
+  // Get my gate progress (always accurate for local player)
+  const myGateIndex = gateData ? gateData.currentGateIndex : 0;
+  let myDistanceToNextGate = 1000000;
+  
+  if (gateData && gateData.gates && gateData.gates.length > myGateIndex && carModel) {
+    const nextGate = gateData.gates[myGateIndex];
+    if (nextGate) {
+      const gatePos = new THREE.Vector3();
+      nextGate.getWorldPosition(gatePos);
+      
+      const dx = carModel.position.x - gatePos.x;
+      const dy = carModel.position.y - gatePos.y;
+      const dz = carModel.position.z - gatePos.z;
+      myDistanceToNextGate = dx * dx + dy * dy + dz * dz;
+    }
+  }
+  
+  // Add myself to positions array
+  playerPositions.push({
+    id: myPlayerId,
+    name: myName,
+    color: myColor,
+    gateIndex: myGateIndex,
+    distanceToNextGate: myDistanceToNextGate
+  });
+  
+  // Debug the data we have for opponents
+  console.log("Opponent cars state:", Object.keys(multiplayerState.opponentCars).length);
+  
+  // Add all opponents with enhanced error checking
+  Object.entries(multiplayerState.opponentCars).forEach(([playerId, opponent]) => {
+    // Only add if updated recently (within last 5 seconds)
+    if (Date.now() - opponent.lastUpdate < 5000) {
+      // Extract and validate race progress data
+      const gateIndex = (opponent.raceProgress && 
+                         typeof opponent.raceProgress.currentGateIndex === 'number') ? 
+                         opponent.raceProgress.currentGateIndex : 0;
+      
+      const distanceToNextGate = (opponent.raceProgress && 
+                                  typeof opponent.raceProgress.distanceToNextGate === 'number') ?
+                                  opponent.raceProgress.distanceToNextGate : 1000000;
+      
+      playerPositions.push({
+        id: playerId,
+        name: opponent.name || 'Player',
+        color: opponent.color || 'red',
+        gateIndex: gateIndex,
+        distanceToNextGate: distanceToNextGate
+      });
+    }
+  });
+  
+  // Log the positions before sorting for debugging
+  console.log("Player positions before sort:", 
+    playerPositions.map(p => ({
+      name: p.name, 
+      gate: p.gateIndex, 
+      dist: Math.round(p.distanceToNextGate)
+    }))
+  );
+  
+  // Sort players by progress with manual fallbacks
+  playerPositions.sort((a, b) => {
+    // First by gate index (higher is better)
+    if (b.gateIndex !== a.gateIndex) {
+      return b.gateIndex - a.gateIndex;
+    }
+    // Then by distance to next gate (lower is better)
+    // Convert to finite numbers with defaults
+    const distA = isFinite(a.distanceToNextGate) ? a.distanceToNextGate : 1000000;
+    const distB = isFinite(b.distanceToNextGate) ? b.distanceToNextGate : 1000000;
+    return distA - distB;
+  });
+  
+  // Generate HTML for leaderboard
+  let leaderboardHTML = '';
+  playerPositions.forEach((player, index) => {
+    const position = index + 1;
+    const positionLabel = getPositionLabel(position);
+    const isCurrentPlayer = player.id === myPlayerId;
+    
+    leaderboardHTML += `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; 
+          ${isCurrentPlayer ? 'font-weight: bold; text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);' : ''}">
+        <div>
+          <span style="color: ${getPositionColor(position)};">${positionLabel}</span>
+          <span style="margin-left: 8px; ${isCurrentPlayer ? 'text-decoration: underline;' : ''}">
+            ${player.name}
+          </span>
+        </div>
+        <div>
+          Gate ${player.gateIndex + 1}/8
+        </div>
+      </div>
+    `;
+  });
+  
+  leaderboardPositions.innerHTML = leaderboardHTML;
+}
+
+// Helper function to get position label
+function getPositionLabel(position) {
+  switch (position) {
+    case 1: return '1st';
+    case 2: return '2nd';
+    case 3: return '3rd';
+    default: return `${position}th`;
+  }
+}
+
+// Helper function to get position color
+function getPositionColor(position) {
+  switch (position) {
+    case 1: return 'gold';
+    case 2: return 'silver';
+    case 3: return '#cd7f32'; // bronze
+    default: return 'white';
+  }
+}
+
+// Make updateLeaderboard available globally for multiplayer.js
+window.updateLeaderboard = updateLeaderboard;
 
 // Function to start the timer
 function startRaceTimer() {
@@ -321,6 +503,11 @@ function startCountdown() {
       // Set race started and log it
       raceState.raceStarted = true;
       console.log('Race started!', raceState);
+
+      // Show leaderboard when race starts in multiplayer
+      if (raceState.isMultiplayer) {
+        leaderboard.style.display = 'block';
+      }
       
       // Start the race timer
       startRaceTimer();
@@ -402,6 +589,8 @@ function init() {
     gateData = loadGates("map1", scene, (loadedGateData) => {
       // Store the reference when gates are fully loaded
       gateData = loadedGateData;
+      // Make gate data globally available for multiplayer
+      window.gateData = gateData;
       console.log(`Gates loaded. Total gates: ${gateData.totalGates}`);
     });
     
@@ -460,6 +649,7 @@ function init() {
   // Later, after you've created the UI:
   createRaceUI();
   createRaceTimer();
+  createLeaderboard();
 }
 
 // Setup key controls for vehicle
@@ -581,6 +771,9 @@ function animate() {
         currentGatePosition.copy(gateData.currentGatePosition);
         currentGateQuaternion.copy(gateData.currentGateQuaternion);
         
+        // Make sure global reference is updated
+        window.gateData = gateData;
+        
         // Show finish message if race is complete
         if (raceFinished) {
           showFinishMessage(gateData.totalGates, () => {
@@ -592,7 +785,7 @@ function animate() {
               currentSteeringAngle, 
               resetCarPosition
             );
-            resetRaceTimer(); // Reset the race timer
+            resetRaceTimer();
           });
         }
         
@@ -602,6 +795,11 @@ function animate() {
     }
     
     updateMarkers();
+    
+    // Add this line
+    if (raceState.isMultiplayer && raceState.raceStarted) {
+      updateLeaderboard();
+    }
     
     // Send car data as before
     if (Math.random() < 0.2) {
@@ -627,6 +825,9 @@ function animate() {
         }
       }
     }
+    
+    // Update leaderboard
+    updateLeaderboard();
   }
   
   renderer.render(scene, camera);
