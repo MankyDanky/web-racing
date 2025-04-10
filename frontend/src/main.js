@@ -214,7 +214,7 @@ function createRaceTimer() {
   document.body.appendChild(raceTimer);
 }
 
-// Create the leaderboard UI
+// Modify the createLeaderboard function to always display the leaderboard
 function createLeaderboard() {
   // Create leaderboard container
   leaderboard = document.createElement('div');
@@ -246,30 +246,30 @@ function createLeaderboard() {
     <div id="leaderboard-positions"></div>
   `;
   
-  // Hide initially in single player mode
-  leaderboard.style.display = raceState.isMultiplayer ? 'block' : 'none';
+  // Hide initially - will be shown when race starts for both single and multiplayer
+  leaderboard.style.display = 'none';
   
   // Add to document
   document.body.appendChild(leaderboard);
 }
 
-// Improve updateLeaderboard function with more robust data handling
+// Update the leaderboard function to remove gate display
 function updateLeaderboard() {
   if (!leaderboard) return;
   
   const leaderboardPositions = document.getElementById('leaderboard-positions');
   if (!leaderboardPositions) return;
   
-  // Get all players including myself
+  // Clear the player positions array
   playerPositions = [];
   
-  // Add myself
+  // Get my player info
   const myPlayerId = localStorage.getItem('myPlayerId');
   const myPlayerInfo = allPlayers.find(p => p.id === myPlayerId);
   const myName = myPlayerInfo?.name || 'You';
   const myColor = myPlayerInfo?.playerColor || 'blue';
   
-  // Get my gate progress (always accurate for local player)
+  // Get my gate progress
   const myGateIndex = gateData ? gateData.currentGateIndex : 0;
   let myDistanceToNextGate = 1000000;
   
@@ -295,73 +295,58 @@ function updateLeaderboard() {
     distanceToNextGate: myDistanceToNextGate
   });
   
-  // Debug the data we have for opponents
-  console.log("Opponent cars state:", Object.keys(multiplayerState.opponentCars).length);
+  // Only add opponents in multiplayer mode
+  if (raceState.isMultiplayer) {
+    Object.entries(multiplayerState.opponentCars).forEach(([playerId, opponent]) => {
+      // Only add if updated recently
+      if (Date.now() - opponent.lastUpdate < 5000) {
+        // Extract and validate race progress data
+        const gateIndex = (opponent.raceProgress && 
+                           typeof opponent.raceProgress.currentGateIndex === 'number') ? 
+                           opponent.raceProgress.currentGateIndex : 0;
+        
+        const distanceToNextGate = (opponent.raceProgress && 
+                                    typeof opponent.raceProgress.distanceToNextGate === 'number') ?
+                                    opponent.raceProgress.distanceToNextGate : 1000000;
+        
+        playerPositions.push({
+          id: playerId,
+          name: opponent.name || 'Player',
+          color: opponent.color || 'red',
+          gateIndex: gateIndex,
+          distanceToNextGate: distanceToNextGate
+        });
+      }
+    });
+    
+    // Sort players by progress in multiplayer mode
+    playerPositions.sort((a, b) => {
+      // First by gate index (higher is better)
+      if (b.gateIndex !== a.gateIndex) {
+        return b.gateIndex - a.gateIndex;
+      }
+      // Then by distance to next gate (lower is better)
+      const distA = isFinite(a.distanceToNextGate) ? a.distanceToNextGate : 1000000;
+      const distB = isFinite(b.distanceToNextGate) ? b.distanceToNextGate : 1000000;
+      return distA - distB;
+    });
+  }
   
-  // Add all opponents with enhanced error checking
-  Object.entries(multiplayerState.opponentCars).forEach(([playerId, opponent]) => {
-    // Only add if updated recently (within last 5 seconds)
-    if (Date.now() - opponent.lastUpdate < 5000) {
-      // Extract and validate race progress data
-      const gateIndex = (opponent.raceProgress && 
-                         typeof opponent.raceProgress.currentGateIndex === 'number') ? 
-                         opponent.raceProgress.currentGateIndex : 0;
-      
-      const distanceToNextGate = (opponent.raceProgress && 
-                                  typeof opponent.raceProgress.distanceToNextGate === 'number') ?
-                                  opponent.raceProgress.distanceToNextGate : 1000000;
-      
-      playerPositions.push({
-        id: playerId,
-        name: opponent.name || 'Player',
-        color: opponent.color || 'red',
-        gateIndex: gateIndex,
-        distanceToNextGate: distanceToNextGate
-      });
-    }
-  });
-  
-  // Log the positions before sorting for debugging
-  console.log("Player positions before sort:", 
-    playerPositions.map(p => ({
-      name: p.name, 
-      gate: p.gateIndex, 
-      dist: Math.round(p.distanceToNextGate)
-    }))
-  );
-  
-  // Sort players by progress with manual fallbacks
-  playerPositions.sort((a, b) => {
-    // First by gate index (higher is better)
-    if (b.gateIndex !== a.gateIndex) {
-      return b.gateIndex - a.gateIndex;
-    }
-    // Then by distance to next gate (lower is better)
-    // Convert to finite numbers with defaults
-    const distA = isFinite(a.distanceToNextGate) ? a.distanceToNextGate : 1000000;
-    const distB = isFinite(b.distanceToNextGate) ? b.distanceToNextGate : 1000000;
-    return distA - distB;
-  });
-  
-  // Generate HTML for leaderboard
+  // Generate HTML for leaderboard - REMOVED GATE INFORMATION
   let leaderboardHTML = '';
   playerPositions.forEach((player, index) => {
-    const position = index + 1;
+    // In single player mode, always show as position 1
+    const position = raceState.isMultiplayer ? (index + 1) : 1;
     const positionLabel = getPositionLabel(position);
     const isCurrentPlayer = player.id === myPlayerId;
     
     leaderboardHTML += `
-      <div style="display: flex; justify-content: space-between; margin-bottom: 8px; 
+      <div style="display: flex; align-items: center; margin-bottom: 8px; 
           ${isCurrentPlayer ? 'font-weight: bold; text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);' : ''}">
-        <div>
-          <span style="color: ${getPositionColor(position)};">${positionLabel}</span>
-          <span style="margin-left: 8px; ${isCurrentPlayer ? 'text-decoration: underline;' : ''}">
-            ${player.name}
-          </span>
-        </div>
-        <div>
-          Gate ${player.gateIndex + 1}/8
-        </div>
+        <span style="color: ${getPositionColor(position)}; min-width: 30px;">${positionLabel}</span>
+        <span style="${isCurrentPlayer ? 'text-decoration: underline;' : ''}">
+          ${player.name}
+        </span>
       </div>
     `;
   });
@@ -504,10 +489,8 @@ function startCountdown() {
       raceState.raceStarted = true;
       console.log('Race started!', raceState);
 
-      // Show leaderboard when race starts in multiplayer
-      if (raceState.isMultiplayer) {
-        leaderboard.style.display = 'block';
-      }
+      // Show leaderboard when race starts for BOTH single player and multiplayer
+      leaderboard.style.display = 'block';
       
       // Start the race timer
       startRaceTimer();
@@ -795,14 +778,14 @@ function animate() {
     }
     
     updateMarkers();
-    
-    // Add this line
-    if (raceState.isMultiplayer && raceState.raceStarted) {
+
+    // Update leaderboard for both single and multiplayer when race has started
+    if (raceState.raceStarted) {
       updateLeaderboard();
     }
-    
-    // Send car data as before
-    if (Math.random() < 0.2) {
+
+    // Send car data as before - only in multiplayer
+    if (raceState.isMultiplayer && Math.random() < 0.2) {
       sendCarData({carModel});
     }
 
