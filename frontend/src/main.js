@@ -96,6 +96,7 @@ let raceState = {
   allPlayersConnected: false,
   countdownStarted: false,
   raceStarted: false,
+  raceFinished: false,  // Add this line
   countdownValue: 3
 };
 
@@ -344,7 +345,7 @@ function updateLeaderboard() {
       <div style="display: flex; align-items: center; margin-bottom: 8px; 
           ${isCurrentPlayer ? 'font-weight: bold; text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);' : ''}">
         <span style="color: ${getPositionColor(position)}; min-width: 30px;">${positionLabel}</span>
-        <span style="${isCurrentPlayer ? 'text-decoration: underline;' : ''}">
+        <span style="${isCurrentPlayer ? 'text-decoration: underline;' : ''}; margin-left: 10px;">
           ${player.name}
         </span>
       </div>
@@ -759,17 +760,21 @@ function animate() {
         
         // Show finish message if race is complete
         if (raceFinished) {
-          showFinishMessage(gateData.totalGates, () => {
-            currentSteeringAngle = resetRace(
-              gateData, 
-              window.Ammo, 
-              carBody, 
-              vehicle, 
-              currentSteeringAngle, 
-              resetCarPosition
-            );
-            resetRaceTimer();
-          });
+          // Only show finish message if we haven't already shown it
+          if (!raceState.raceFinished) {
+            showFinishMessage(gateData.totalGates, null); // Remove the reset callback
+            
+            // Stop the race timer
+            if (timerInterval) {
+              clearInterval(timerInterval);
+            }
+            
+            // In multiplayer mode, broadcast that you've finished
+            if (raceState.isMultiplayer && isHost) {
+              // Use existing broadcast mechanism or add a new one for race finish
+              multiplayerState.broadcastRaceStart(); // Reuse existing function
+            }
+          }
         }
         
         // Update gate fade effects

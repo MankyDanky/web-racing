@@ -214,6 +214,9 @@ export function checkGateProximity(carModel, gateData) {
 
 // Function to show finish message
 export function showFinishMessage(totalGates, resetCallback) {
+  // Set the raceFinished state to true
+  window.raceState.raceFinished = true;
+  
   // Create finish message UI
   const finishUI = document.createElement('div');
   finishUI.style.position = 'absolute';
@@ -228,19 +231,26 @@ export function showFinishMessage(totalGates, resetCallback) {
   finishUI.style.fontSize = '24px';
   finishUI.style.textAlign = 'center';
   finishUI.style.zIndex = '1000';
+  
+  // Show race completion time
+  const raceTimer = document.querySelector('div[style*="position: absolute"][style*="top: 20px"][style*="left: 50%"]');
+  const finalTime = raceTimer ? raceTimer.innerText : "00:00";
+  
   finishUI.innerHTML = `
     <h2>Race Complete!</h2>
     <p>You passed through all ${totalGates} gates!</p>
-    <button id="restart-btn" style="background: #4dc9ff; border: none; padding: 10px 20px; 
-    border-radius: 5px; color: black; font-weight: bold; cursor: pointer;">Restart Race</button>
+    <p>Final time: ${finalTime}</p>
   `;
+  
   document.body.appendChild(finishUI);
   
-  // Add restart button event listener
-  document.getElementById('restart-btn').addEventListener('click', () => {
-    if (resetCallback) resetCallback();
+  // Auto-remove the message after 5 seconds
+  setTimeout(() => {
+    // Remove the finish UI
     document.body.removeChild(finishUI);
-  });
+    
+    // Don't reset the race - car remains uncontrollable
+  }, 5000);
   
   return finishUI;
 }

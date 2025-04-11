@@ -57,8 +57,8 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
   let engineForce = 0;
   let brakingForce = 0;
   
-  // Only allow movement if race has started or countdown is complete
-  if (raceState.raceStarted) {
+  // Only allow movement if race has started and not finished
+  if (raceState.raceStarted && !raceState.raceFinished) {
     // Handle key inputs with proper braking logic
     if (keyState.w) {
       // Accelerate forward
@@ -80,7 +80,7 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
       brakingForce = 20;
     }
   } else {
-    // Always apply brakes during countdown for any mode
+    // Either countdown not over or race is finished - apply brakes
     brakingForce = maxBrakingForce;
   }
   
@@ -94,9 +94,13 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
     // Braking force to all wheels for better braking
     vehicle.setBrake(brakingForce, i);
   }
+
+  let  newSteeringAngle = 0;
   
   // Call updateSteering to update the steering angle
-  const newSteeringAngle = updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle);
+  if (!raceState.raceFinished) {
+    newSteeringAngle = updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle);
+  }
   
   // Calculate car speed in km/h (assuming your units are meters)
   const speedKPH = velocityThree.length() * 3.6; // Convert m/s to km/h
