@@ -116,6 +116,12 @@ let waitingForPlayersOverlay;
 let leaderboard;
 let playerPositions = [];
 
+// Add these spectator variables to your global declarations
+let spectatorMode = false;
+let spectatedPlayerIndex = -1;
+let spectatorUI;
+let activeRacers = [];
+
 // Add these functions before init():
 
 // Create the waiting and countdown UI elements
@@ -508,6 +514,160 @@ function startCountdown() {
 // Make startCountdown globally accessible for the multiplayer module
 window.startCountdown = startCountdown;
 
+// Create spectator UI elements
+function createSpectatorUI() {
+  spectatorUI = document.createElement('div');
+  spectatorUI.style.position = 'absolute';
+  spectatorUI.style.bottom = '20px';
+  spectatorUI.style.left = '50%';
+  spectatorUI.style.transform = 'translateX(-50%)';
+  spectatorUI.style.background = 'rgba(0, 0, 0, 0.5)';
+  spectatorUI.style.color = '#fff';
+  spectatorUI.style.padding = '10px 20px';
+  spectatorUI.style.borderRadius = '10px';
+  spectatorUI.style.fontFamily = "'Exo 2', sans-serif";
+  spectatorUI.style.fontSize = '18px';
+  spectatorUI.style.fontWeight = 'bold';
+  spectatorUI.style.textAlign = 'center';
+  spectatorUI.style.zIndex = '1000';
+  spectatorUI.style.display = 'none';
+  spectatorUI.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  spectatorUI.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+  
+  // Create container for player name and navigation arrows
+  spectatorUI.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center;">
+      <div id="prev-player" style="cursor: pointer; margin-right: 15px; font-size: 24px;">◀</div>
+      <div id="spectated-player-name">Spectating: Player</div>
+      <div id="next-player" style="cursor: pointer; margin-left: 15px; font-size: 24px;">▶</div>
+    </div>
+  `;
+  
+  document.body.appendChild(spectatorUI);
+  
+  // Add event listeners to the navigation arrows
+  document.getElementById('prev-player').addEventListener('click', () => {
+    switchSpectatedPlayer(-1);
+  });
+  
+  document.getElementById('next-player').addEventListener('click', () => {
+    switchSpectatedPlayer(1);
+  });
+  
+  // Also allow keyboard navigation with left/right arrows
+  document.addEventListener('keydown', (event) => {
+    if (!spectatorMode) return;
+    
+    if (event.key === 'ArrowLeft') {
+      switchSpectatedPlayer(-1);
+    } else if (event.key === 'ArrowRight') {
+      switchSpectatedPlayer(1);
+    }
+  });
+}
+
+// Function to enter spectator mode
+function enterSpectatorMode() {
+  if (!raceState.isMultiplayer) return;
+  
+  console.log("Entering spectator mode");
+  spectatorMode = true;
+  
+  // Get all active racers (players who haven't finished yet)
+  updateActiveRacers();
+  
+  // If there are active racers, start spectating the first one
+  if (activeRacers.length > 0) {
+    spectatedPlayerIndex = 0;
+    updateSpectatorUI();
+    spectatorUI.style.display = 'block';
+  } else {
+    console.log("No active racers to spectate");
+  }
+}
+
+// Update the list of active racers
+function updateActiveRacers() {
+  activeRacers = [];
+  
+  // Add all opponents who have updated recently and haven't finished
+  Object.entries(multiplayerState.opponentCars).forEach(([playerId, opponent]) => {
+    // Only include players who have updated in the last 5 seconds and aren't finished
+    if (Date.now() - opponent.lastUpdate < 5000 && !opponent.raceFinished) {
+      activeRacers.push({
+        id: playerId,
+        name: opponent.name || 'Player',
+        model: opponent.model
+      });
+    }
+  });
+  
+  console.log(`Found ${activeRacers.length} active racers`);
+}
+
+// Switch to next/previous spectated player
+function switchSpectatedPlayer(direction) {
+  if (activeRacers.length === 0) return;
+  
+  // Update active racers list first
+  updateActiveRacers();
+  
+  // If no more active racers, exit spectator mode
+  if (activeRacers.length === 0) {
+    exitSpectatorMode();
+    return;
+  }
+  
+  // Update spectated player index
+  spectatedPlayerIndex = (spectatedPlayerIndex + direction + activeRacers.length) % activeRacers.length;
+  updateSpectatorUI();
+}
+
+// Update spectator UI with current player name
+function updateSpectatorUI() {
+  if (!spectatorMode || activeRacers.length === 0) return;
+  
+  const spectatedPlayer = activeRacers[spectatedPlayerIndex];
+  document.getElementById('spectated-player-name').textContent = `Spectating: ${spectatedPlayer.name}`;
+}
+
+// Exit spectator mode
+function exitSpectatorMode() {
+  spectatorMode = false;
+  spectatedPlayerIndex = -1;
+  spectatorUI.style.display = 'none';
+}
+
+// Update the spectator camera position
+function updateSpectatorCamera() {
+  if (!spectatorMode || activeRacers.length === 0) return;
+  
+  const targetCar = activeRacers[spectatedPlayerIndex].model;
+  if (!targetCar) return;
+  
+  // Get car's position
+  const carPos = targetCar.position.clone();
+  
+  // Get car's forward direction
+  const carDirection = new THREE.Vector3(0, 0, 1);
+  carDirection.applyQuaternion(targetCar.quaternion);
+  
+  // Calculate camera position - behind and above the car
+  const cameraOffset = carDirection.clone().multiplyScalar(-CAMERA_DISTANCE);
+  const targetPosition = carPos.clone()
+    .add(cameraOffset)
+    .add(new THREE.Vector3(0, CAMERA_HEIGHT, 0));
+  
+  // Smoothly interpolate camera position
+  camera.position.lerp(targetPosition, CAMERA_LERP);
+  
+  // Look at a point slightly ahead of the car
+  const lookAtPos = carPos.clone().add(
+    carDirection.clone().multiplyScalar(CAMERA_LOOK_AHEAD)
+  );
+  camera.lookAt(lookAtPos);
+}
+
 // Initialize everything
 function init() {
   console.log("Main module loaded");
@@ -634,6 +794,11 @@ function init() {
   createRaceUI();
   createRaceTimer();
   createLeaderboard();
+  createSpectatorUI(); // Add this line
+  
+  // Make spectator functions globally available
+  window.enterSpectatorMode = enterSpectatorMode;
+  window.exitSpectatorMode = exitSpectatorMode;
 }
 
 // Setup key controls for vehicle
@@ -656,6 +821,15 @@ function setupKeyControls() {
           gateData.currentGatePosition, 
           gateData.currentGateQuaternion
         );
+      }
+    }
+
+    // Add spectator mode toggle
+    if (event.key.toLowerCase() === 'p') {
+      if (spectatorMode) {
+        exitSpectatorMode();
+      } else {
+        enterSpectatorMode();
       }
     }
   });
@@ -746,7 +920,11 @@ function animate() {
       });
       
       accumulator -= FIXED_PHYSICS_STEP;
-      updateCamera();
+      if (spectatorMode) {
+        updateSpectatorCamera();
+      } else {
+        updateCamera();
+      }
       if (gateData) {
         // Check if player passed through a gate
         const raceFinished = checkGateProximity(carModel, gateData);

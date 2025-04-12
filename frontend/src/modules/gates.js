@@ -236,20 +236,30 @@ export function showFinishMessage(totalGates, resetCallback) {
   const raceTimer = document.querySelector('div[style*="position: absolute"][style*="top: 20px"][style*="left: 50%"]');
   const finalTime = raceTimer ? raceTimer.innerText : "00:00";
   
+  // Add special text for multiplayer mode
+  const spectatorText = window.raceState.isMultiplayer ? 
+    '<p>Entering spectator mode...</p>' : '';
+  
   finishUI.innerHTML = `
     <h2>Race Complete!</h2>
     <p>You passed through all ${totalGates} gates!</p>
     <p>Final time: ${finalTime}</p>
+    ${spectatorText}
   `;
   
   document.body.appendChild(finishUI);
+  
+  // Enter spectator mode in multiplayer after showing finish message
+  if (window.raceState.isMultiplayer && window.enterSpectatorMode) {
+    setTimeout(() => {
+      window.enterSpectatorMode();
+    }, 2000);
+  }
   
   // Auto-remove the message after 5 seconds
   setTimeout(() => {
     // Remove the finish UI
     document.body.removeChild(finishUI);
-    
-    // Don't reset the race - car remains uncontrollable
   }, 5000);
   
   return finishUI;
