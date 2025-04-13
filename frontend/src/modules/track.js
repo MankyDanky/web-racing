@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Function to load the track model and add to scene
-export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld) {
+export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld, callback) {
   const loader = new GLTFLoader();
   
   loader.load(
@@ -37,6 +37,11 @@ export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld) {
       
       // Add physics collider for the track
       addTrackCollider(track, ammo, physicsWorld);
+      
+      // Call the callback with the track model if provided
+      if (callback && typeof callback === 'function') {
+        callback(track);
+      }
     },
     (xhr) => {
       console.log(`Loading track: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);

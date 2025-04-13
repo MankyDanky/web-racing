@@ -21,6 +21,7 @@ import {
   updateOpponentCarPosition 
 } from './modules/multiplayer.js';
 import { initPhysics, updatePhysics, FIXED_PHYSICS_STEP } from './modules/physics.js';
+import { createMinimap, extractTrackData, updateMinimapPlayers } from './modules/minimap.js';
 
 // Check for game config from lobby
 let gameConfig = null;
@@ -121,6 +122,9 @@ let spectatorMode = false;
 let spectatedPlayerIndex = -1;
 let spectatorUI;
 let activeRacers = [];
+
+// Add this variable to your global variables section
+let minimapState;
 
 // Add these functions before init():
 
@@ -724,7 +728,11 @@ function init() {
     tmpTrans = physicsState.tmpTrans;
     
     // Load the track as a single model
-    loadTrackModel(ammo, "map1", scene, physicsWorld);
+    loadTrackModel(ammo, "map1", scene, physicsWorld, (trackModel) => {
+      console.log("Track model loaded, extracting for minimap");
+      // Extract track data for minimap when track is loaded
+      extractTrackData(trackModel);
+    });
     
     // Load map decorations
     loadMapDecorations("map1", scene, renderer, camera);
@@ -796,6 +804,9 @@ function init() {
   createLeaderboard();
   createSpectatorUI(); // Add this line
   
+  // Create minimap
+  minimapState = createMinimap();
+
   // Make spectator functions globally available
   window.enterSpectatorMode = enterSpectatorMode;
   window.exitSpectatorMode = exitSpectatorMode;
@@ -965,6 +976,11 @@ function animate() {
     // Update leaderboard for both single and multiplayer when race has started
     if (raceState.raceStarted) {
       updateLeaderboard();
+      
+      // Update minimap player positions
+      if (carModel) {
+        updateMinimapPlayers(carModel, multiplayerState?.opponentCars);
+      }
     }
 
     // Send car data as before - only in multiplayer
