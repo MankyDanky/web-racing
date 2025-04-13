@@ -38,7 +38,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   
   // Create chassis physics body with modified dimensions
   const chassisShape = new ammo.btBoxShape(
-    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2 * 0.8, VEHICLE_LENGTH/2 * 0.9)
+    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2, VEHICLE_LENGTH/2)
   );
   
   const chassisTransform = new ammo.btTransform();
