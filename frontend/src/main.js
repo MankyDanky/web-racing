@@ -1047,7 +1047,7 @@ function initUI() {
 // Function to update the speedometer with perfect alignment
 function updateSpeedometer(speed) {
   // Smooth the speed change
-  currentSpeed = currentSpeed * 0.9 + speed * 0.1;
+  currentSpeed = speed -1;
   
   // Get speed as percentage of max speed
   const speedPercent = Math.min(currentSpeed / MAX_SPEED_KPH, 1);
