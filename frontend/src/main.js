@@ -968,7 +968,7 @@ function animate() {
     }
 
     // Send car data as before - only in multiplayer
-    if (raceState.isMultiplayer && Math.random() < 0.2) {
+    if (raceState.isMultiplayer) {
       sendCarData({carModel});
     }
 
