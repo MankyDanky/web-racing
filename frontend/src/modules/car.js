@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 // Vehicle parameters
 const VEHICLE_WIDTH = 2.0;
 const VEHICLE_HEIGHT = 0.6;
-const VEHICLE_LENGTH = 3.0;
+const VEHICLE_LENGTH = 4.0;
 const WHEEL_RADIUS = 0.4;
 const WHEEL_WIDTH = 0.25;
 const SUSPENSION_REST_LENGTH = 0.5;
@@ -38,7 +38,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   
   // Create chassis physics body with modified dimensions
   const chassisShape = new ammo.btBoxShape(
-    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2, VEHICLE_LENGTH/2)
+    new ammo.btVector3(VEHICLE_WIDTH/2, VEHICLE_HEIGHT/2 * 0.8, VEHICLE_LENGTH/2 * 0.9)
   );
   
   const chassisTransform = new ammo.btTransform();
