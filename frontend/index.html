@@ -24,34 +24,25 @@
     <!-- Main Content Area -->
     <main class="game-content">
       <!-- Left Side - Host Controls -->
-      <section class="game-panel left-panel">
+      <section class="left-panel">
         <div class="panel-content">
           <h2 class="panel-title">HOST RACE</h2>
           
           <div id="host-controls">
-            <button id="create-party-btn" class="game-btn create-btn">Create Party</button>
+            <button id="create-party-btn" class="icon-btn create-btn">Create Party</button>
             
             <div id="host-info" class="hidden">
               <!-- Party Code Display -->
               <div class="code-display">
-                <h3>PARTY CODE</h3>
                 <div class="code-box">
                   <span id="party-code" class="code">XXXXXX</span>
                   <button id="copy-code-btn" class="icon-btn">COPY</button>
                 </div>
                 <p class="code-instructions">Share this code with friends</p>
               </div>
-
-              <div class="game-info">
-                <h3>RACE DETAILS</h3>
-                <div class="info-container">
-                  <p class="map-info">Map: Mountain Pass</p>
-                  <p class="ready-text">Ready to race!</p>
-                </div>
-              </div>
               
               <!-- Host's Stop Hosting Button -->
-              <button id="host-stop-btn" class="game-btn stop-btn">STOP HOSTING</button>
+              <button id="host-stop-btn" class="icon-btn stop-btn">STOP HOSTING</button>
             </div>
           </div>
         </div>
@@ -64,7 +55,7 @@
         
         <!-- Add this below the canvas and above the player name input -->
         <div class="color-carousel">
-          <h3>Select Car Color</h3>
+          <h3>SELECT CAR COLOR</h3>
           <div class="color-options">
             <div class="color-option active" data-color="red" style="background-color: #ff7070;"></div>
             <div class="color-option" data-color="orange" style="background-color: #ffb766;"></div>
@@ -87,7 +78,7 @@
       </section>
       
       <!-- Right Side - Players List and Join -->
-      <section class="game-panel right-panel">
+      <section class="right-panel">
         <div class="panel-content">
           <h2 class="panel-title">RACERS</h2>
           <div class="players-container">
@@ -102,7 +93,7 @@
             <div id="code-input">
               <div class="code-input">
                 <input type="text" id="join-code-input" placeholder="ENTER PARTY CODE" maxlength="6">
-                <button id="join-party-btn" class="game-btn join-btn">JOIN</button>
+                <button id="join-party-btn" class="icon-btn join-btn">JOIN</button>
               </div>
               <p id="join-status" class="status-message"></p>
             </div>

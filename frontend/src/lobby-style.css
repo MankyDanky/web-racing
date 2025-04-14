@@ -9,7 +9,6 @@ body {
   font-family: 'Poppins', sans-serif;
   color: black;
   height: 100vh;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,7 +40,6 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
 }
 
 /* Header */
@@ -64,23 +62,57 @@ body {
   text-shadow: 0px 5px 0px rgb(0, 0, 0);
 }
 
-/* Main Content Area */
+/* Main Content Area - Make it position relative to contain absolute children */
 .game-content {
-  display: flex;
+  display: block; /* Changed from flex */
   flex: 1;
   position: relative;
   background: transparent;
+  height: 100%;
 }
 
-/* Keep the game panels with some transparency */
-.game-panel {
-  flex: 0 0 25%;
+/* Left Panel (Host Race) absolute positioning */
+.left-panel {
+  position: fixed;
+  text-align: center;
+  top: 20px;
+  left: 20px;
+  width: 22%;
+  height: auto;
+  max-height: 450px; /* Slightly reduced height */
   border-radius: 10px;
-  position: relative;
-  overflow: hidden;
-  max-height: 80vh; /* Set maximum height */
+  z-index: 10;
 }
 
+/* Right Panel (Racers) absolute positioning */
+.right-panel {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 22%;
+  height: auto;
+  max-height: 450px; /* Slightly reduced height */
+  border-radius: 10px;
+  overflow: hidden;
+  z-index: 10;
+  text-align: center;
+}
+
+/* Center Panel stays centered but fixed size instead of flex */
+.center-panel {
+  position: relative;
+  width: 40%;
+  margin: 0 auto;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 25px;
+  gap: 10px;
+  overflow: hidden;
+  border-radius: 10px;
+}
 .panel-content {
   padding: 25px;
   height: auto;
@@ -99,23 +131,17 @@ body {
   font-size: 2rem;
 }
 
-/* Center panel layout adjustments */
-.center-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 25px; /* Match panel-content padding */
-  gap: 10px;
-  overflow: hidden; /* Match game-panel overflow */
-  max-height: 80vh; /* Match game-panel max-height */
+/* Slightly smaller text for side panels */
+.left-panel .panel-title,
+.right-panel .panel-title {
+  font-size: 1.8rem;
+  margin-bottom: 5px;
 }
 
 /* Car model container takes up less space */
 #car-model-container {
   width: 100%;
-  height: 45%; /* Adjust height to fit within the new container */
+  height: 150px; /* Adjust height to fit within the new container */
   position: relative;
   margin-bottom: 0; /* Removed margin since we're using gap */
 }
@@ -131,25 +157,26 @@ body {
   font-family:'Poppins', sans-serif;
   font-weight: 900;
   margin-bottom: 15px;
+  font-size: 2rem;
   color: #ffffff;
-  -webkit-text-stroke: 1px #000;
+  -webkit-text-stroke: 2px #000;
   text-align: center;
 }
 
 /* Play button in center panel */
 .center-panel .play-btn {
-  margin-top: auto;
+  margin-top: 15px;
   margin-bottom: 15px;
 }
 
 /* Game Buttons - Base styles for all buttons */
-.game-btn, .create-btn, .join-btn, #host-start-btn, #play-btn, .stop-btn {
+.play-btn, game-btn, #host-start-btn {
   font-family:'Poppins', sans-serif;
   font-weight: 900;
-  font-size: 1.5rem; /* Larger text size */
-  padding: 18px 25px; /* Consistent padding */
+  font-size: 1.2rem; /* Larger text size */
   width: 100%; /* Full width for all buttons */
   max-width: 400px; /* Maximum width */
+  height: 60px;
   border: 3px solid #b30059; /* Darker outline */
   background-color: #ff0080; /* Solid pink background */
   border-radius: 5px;
@@ -158,11 +185,14 @@ body {
   text-transform: uppercase;
   position: relative;
   color: #ffffff; /* White text */
-  -webkit-text-stroke: 1.5px #000; /* Black text outline */
+  -webkit-text-stroke: 1.5px #b30059; /* Black text outline */
   text-align: center;
   margin-bottom: 15px;
-  /* Vertical shadow matching the outline */
   box-shadow: 0 6px 0 #b30059;
+}
+
+.stop-btn {
+  margin: auto;
 }
 
 /* Button hover effect */
@@ -185,7 +215,7 @@ body {
   background-color: #ff0080;
   border: 2px solid #b30059;
   color: white;
-  -webkit-text-stroke: 0.5px #000;
+  -webkit-text-stroke: 1px #b30059;
   border-radius: 3px;
   padding: 8px 12px;
   cursor: pointer;
@@ -206,19 +236,6 @@ body {
   box-shadow: 0 0 0 #b30059;
 }
 
-/* Remove any specific button styles that would override the above */
-.create-btn {
-  margin-bottom: 20px;
-}
-
-.join-btn {
-  margin-top: 10px;
-}
-
-.stop-btn {
-  margin-top: 20px;
-}
-
 /* Party Code Section */
 #code-display {
   width: 100%;
@@ -229,7 +246,6 @@ body {
   background: transparent;
   border-radius: 10px;
   padding: 20px;
-  border: 1px solid rgba(77, 201, 255, 0.3);
   text-align: center;
   margin-bottom: 20px;
   /* Removed box-shadow and other inconsistent styles */
@@ -245,8 +261,9 @@ body {
   font-family:'Poppins', sans-serif;
   font-weight: 900;
   margin-bottom: 15px;
+  font-size: 28px;
   color: #ffffff;
-  -webkit-text-stroke: 1px #000;
+  -webkit-text-stroke: 2px #000;
   text-align: center;
 }
 
@@ -258,17 +275,16 @@ body {
   justify-content: center;
   gap: 10px;
   margin-bottom: 10px;
-  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .code {
-  font-family: 'Exo 2', sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-size: 2rem;
-  font-weight: bold;
+  font-weight: 900;
   letter-spacing: 5px;
   color: #ff0080;
   flex: 1;
-  text-shadow: 0 2px 2px #000;
+  -webkit-text-stroke: 2px #b30059;
 }
 
 .code-instructions {
@@ -282,26 +298,20 @@ input {
   width: 100%;
   padding: 12px;
   border-radius: 5px;
-  background-color: transparent;
-  border: 2px solid #4dc9ff;
-  color: white;
+  background-color: white;
+  border: 2px solid #000000;
+  color: #000000;
   font-family: 'Poppins', sans-serif;
   font-weight: bold;
   font-size: 1.2rem;
   text-align: center;
   margin-bottom: 10px;
-  box-shadow: 0 0 10px rgba(77, 201, 255, 0.5);
+  box-shadow: 0px 5px 0px rgba(0, 0, 0, 1);
 }
 
 input::placeholder {
   color: rgba(255, 255, 255, 0.5);
   font-size: 0.9rem;
-}
-
-input:focus {
-  outline: none;
-  border-color: #ff0080;
-  box-shadow: 0 0 15px rgba(255, 0, 128, 0.5);
 }
 
 /* Game Info Section */
@@ -351,10 +361,8 @@ input:focus {
   overflow-y: auto;
   background: transparent;
   border-radius: 10px;
-  padding: 10px;
-  border: 1px solid rgba(77, 201, 255, 0.3);
   margin-bottom: 20px;
-  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
+  max-height: 200px; /* Make the player list smaller in height */
 }
 
 .player-list {
@@ -364,7 +372,6 @@ input:focus {
 
 .player-list li {
   padding: 15px;
-  background: rgba(255, 255, 255, 0.1);
   margin-bottom: 10px;
   border-radius: 8px;
   display: flex;
@@ -382,9 +389,8 @@ input:focus {
   font-weight: bold;
   font-size: 0.8rem;
   padding: 5px 10px;
-  border-radius: 50px;
+  border-radius: 5px;
   margin-left: auto;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
 .no-players {
@@ -403,7 +409,6 @@ input:focus {
   font-size: 0.9rem;
   height: 20px;
   margin-top: 5px;
-  text-shadow: 0 1px 0 #000;
 }
 
 /* Car Color Carousel */
@@ -442,29 +447,4 @@ input:focus {
 /* Utilities */
 .hidden {
   display: none !important;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .game-title {
-    font-size: 3rem;
-  }
-  
-  .panel-title {
-    font-size: 1.5rem;
-  }
-}
-
-@media (max-width: 992px) {
-  .game-content {
-    flex-direction: column;
-  }
-  
-  .game-panel {
-    flex: 0 0 auto;
-  }
-  
-  #car-model-container {
-    height: 200px;
-  }
 }
