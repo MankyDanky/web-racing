@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 // Vehicle parameters
 const VEHICLE_WIDTH = 2.0;
 const VEHICLE_HEIGHT = 0.6;
-const VEHICLE_LENGTH = 4.0;
+const VEHICLE_LENGTH = 3.0;
 const WHEEL_RADIUS = 0.4;
 const WHEEL_WIDTH = 0.25;
 const SUSPENSION_REST_LENGTH = 0.5;
