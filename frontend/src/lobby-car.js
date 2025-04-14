@@ -36,7 +36,7 @@ class CarPreview {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     this.camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
-    this.camera.position.set(0, 4, 8); // Moved back to show bigger car
+    this.camera.position.set(0, 3, 8); // Moved back to show bigger car
     this.camera.lookAt(0, 2, 0);
     // Set up renderer
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

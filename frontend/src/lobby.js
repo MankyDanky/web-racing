@@ -39,6 +39,14 @@ class RacingLobby {
       // Player list
       this.playerList = document.getElementById('player-list');
       
+      // Racers panel
+      this.racersTitle = document.querySelector('.right-panel .panel-title');
+      this.playersContainer = document.querySelector('.players-container');
+      
+      // Initially hide just the racers title and player list, not the join section
+      this.racersTitle.classList.add('hidden');
+      this.playersContainer.classList.add('hidden');
+      
       // Initialize player name with random name
       this.playerNameInput.value = this.playerName;
     }
@@ -209,6 +217,10 @@ class RacingLobby {
         this.hostInfo.classList.remove('hidden');
         this.createPartyBtn.classList.add('hidden');
         
+        // Show racers panel when hosting (title and player list only)
+        this.racersTitle.classList.remove('hidden');
+        this.playersContainer.classList.remove('hidden');
+        
         // Add host to player list
         this.players = [{
           id: this.playerId,
@@ -250,6 +262,13 @@ class RacingLobby {
           conn.on('open', () => {
             this.hostId = hostPeerId;
             
+            // Show racers panel when joining a party
+            this.racersTitle.classList.remove('hidden');
+            this.playersContainer.classList.remove('hidden');
+            
+            // Hide the join party controls
+            this.joinSection.classList.add('hidden');
+            
             // Send player info to host with color
             conn.send({
               type: 'joinRequest',
@@ -281,6 +300,42 @@ class RacingLobby {
           console.error('Error looking up party:', error);
           this.joinStatus.textContent = 'Could not find that party. Check the code and try again.';
         });
+    }
+    
+    leaveParty() {
+      if (!this.hostId) return;
+      
+      // Find the host connection
+      const hostConnection = this.connections.find(conn => conn.peerId === this.hostId);
+      if (hostConnection && hostConnection.connection) {
+        // Notify host that we're leaving
+        hostConnection.connection.send({
+          type: 'playerLeft',
+          playerId: this.playerId
+        });
+        
+        // Close the connection
+        try {
+          hostConnection.connection.close();
+        } catch (e) {
+          console.log('Error closing connection:', e);
+        }
+      }
+      
+      // Reset state
+      this.hostId = null;
+      this.connections = [];
+      this.players = [];
+      
+      // Update UI
+      this.racersTitle.classList.add('hidden');
+      this.playersContainer.classList.add('hidden');
+      this.joinSection.classList.remove('hidden');
+      this.joinStatus.textContent = '';
+      this.joinCodeInput.value = '';
+      
+      // Update player list to show no players
+      this.updatePlayerList();
     }
     
     handleIncomingConnection(conn) {
@@ -356,6 +411,9 @@ class RacingLobby {
           
         case 'partyEnded':
           alert('The host has ended the party.');
+          // Hide only the racers title and player list
+          this.racersTitle.classList.add('hidden');
+          this.playersContainer.classList.add('hidden');
           window.location.reload(); // Reload the page to reset everything
           break;
 
@@ -378,6 +436,20 @@ class RacingLobby {
                 trackId: 'map1'
               });
             }
+          }
+          break;
+
+        case 'playerLeft':
+          if (this.isHost) {
+            // Remove the player from the list
+            this.removePlayer(data.playerId);
+            
+            // Broadcast updated player list
+            this.broadcastToAll({
+              type: 'partyState',
+              players: this.players,
+              trackId: 'map1'
+            });
           }
           break;
       }
@@ -412,6 +484,14 @@ class RacingLobby {
             hostBadge.textContent = 'HOST';
             hostBadge.classList.add('host-badge');
             li.appendChild(hostBadge);
+          } 
+          // Add exit button for current player if not host
+          else if (player.id === this.playerId && !this.isHost) {
+            const exitButton = document.createElement('button');
+            exitButton.textContent = 'EXIT';
+            exitButton.classList.add('exit-button');
+            exitButton.addEventListener('click', () => this.leaveParty());
+            li.appendChild(exitButton);
           }
           
           this.playerList.appendChild(li);
@@ -541,6 +621,10 @@ class RacingLobby {
       this.createPartyBtn.classList.remove('hidden');
       this.createPartyBtn.disabled = false;
       this.joinSection.classList.remove('hidden');
+      
+      // Hide racers title and player list when no longer hosting
+      this.racersTitle.classList.add('hidden');
+      this.playersContainer.classList.add('hidden');
       
       // Update player list to show no players
       this.updatePlayerList();

@@ -108,7 +108,6 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 25px;
   gap: 10px;
   overflow: hidden;
   border-radius: 10px;
@@ -203,6 +202,12 @@ body {
   box-shadow: 0 4px 0 #b30059;
 }
 
+.create-btn {
+  position: fixed;
+  left: 20px;
+  top: 50px;
+}
+
 /* Button active effect */
 .game-btn:active, .create-btn:active, .join-btn:active,
 #host-start-btn:active, #play-btn:active, .stop-btn:active {
@@ -210,7 +215,6 @@ body {
   box-shadow: 0 0 0 #b30059;
 }
 
-/* Copy button (smaller variant) */
 .icon-btn {
   background-color: #ff0080;
   border: 2px solid #b30059;
@@ -267,6 +271,16 @@ body {
   text-align: center;
 }
 
+.code-input {
+  position: fixed;
+  top: 50px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
 .code-box {
   border-radius: 5px;
   padding: 10px;
@@ -287,6 +301,10 @@ body {
   -webkit-text-stroke: 2px #b30059;
 }
 
+#join-code-input {
+  margin-top: 10px;
+}
+
 .code-instructions {
   font-size: 0.9rem;
   opacity: 0.8;
@@ -296,6 +314,7 @@ body {
 /* Input Fields */
 input {
   width: 100%;
+  max-width: 250px;
   padding: 12px;
   border-radius: 5px;
   background-color: white;
@@ -310,7 +329,7 @@ input {
 }
 
 input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgb(125, 125, 125);
   font-size: 0.9rem;
 }
 
@@ -391,6 +410,33 @@ input::placeholder {
   padding: 5px 10px;
   border-radius: 5px;
   margin-left: auto;
+}
+
+/* Exit Button */
+.exit-button {
+  background-color: #ff0080;
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  font-weight: bold;
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  margin-left: auto;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #b30059;
+  transition: all 0.2s ease;
+}
+
+.exit-button:hover {
+  background-color: #f5007c;
+  transform: translateY(1px);
+  box-shadow: 0 2px 0 #b30059;
+}
+
+.exit-button:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #b30059;
 }
 
 .no-players {
