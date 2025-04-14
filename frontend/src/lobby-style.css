@@ -13,15 +13,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-size: 60px 60px;
+  background-size: 425px 425px;
   background-image: repeating-linear-gradient(
     45deg,
     #ffffff 0,
     #ffffff 30px,
-    #e0e0e0 30px,
-    #e0e0e0 60px
+    #f2f2f2 30px,
+    #f2f2f2 60px
   );
-  animation: slideBackground 15s linear infinite;
+  animation: slideBackground 10s linear infinite;
 }
 
 /* Animation for scrolling background */
@@ -30,7 +30,7 @@ body {
     background-position: 0 0;
   }
   to {
-    background-position: 60px 0;
+    background-position: 425px 0;
   }
 }
 
