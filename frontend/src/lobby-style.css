@@ -4,15 +4,34 @@
   box-sizing: border-box;
 }
 
+/* Update body with diagonal stripes that scroll right */
 body {
-  font-family: 'Exo 2', sans-serif;
-  background: linear-gradient(to bottom, #222c38, #242f3e);
-  color: white;
+  font-family: Arial, sans-serif;
+  color: black;
   height: 100vh;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  background-size: 60px 60px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    #ffffff 0,
+    #ffffff 30px,
+    #e0e0e0 30px,
+    #e0e0e0 60px
+  );
+  animation: slideBackground 15s linear infinite;
+}
+
+/* Animation for scrolling background */
+@keyframes slideBackground {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 60px 0;
+  }
 }
 
 /* Game Container */
@@ -32,16 +51,16 @@ body {
   z-index: 10;
 }
 
-/* Main Game Title */
+/* Game title updates */
 .game-title {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
   font-size: 4rem;
   text-transform: uppercase;
-  color: #fff;
+  color: #0066cc;
   letter-spacing: 4px;
   margin: 0;
-  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.7), 0 2px 4px rgba(0, 0, 0, 0.9);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Main Content Area */
@@ -52,10 +71,10 @@ body {
   position: relative;
 }
 
-/* Side Panels - removed ::before gradient and fixed height */
+/* Keep the game panels with some transparency */
 .game-panel {
   flex: 0 0 25%;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(240, 240, 240, 0.7);
   border-radius: 10px;
   position: relative;
   overflow: hidden;
@@ -71,13 +90,13 @@ body {
   background-color: transparent;
 }
 
-/* Panel Titles */
+/* Panel title updates */
 .panel-title {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
   margin-bottom: 20px;
-  color: #4dc9ff;
-  text-shadow: 0 3px 5px rgba(0, 0, 0, 0.8);
+  color: #0066cc;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
   text-align: center;
   font-size: 2rem;
 }
@@ -109,11 +128,12 @@ body {
 }
 
 .player-name-container h3 {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: #4dc9ff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
+  margin-bottom: 15px;
+  color: #0066cc;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  text-align: center;
 }
 
 /* Play button in center panel */
@@ -161,16 +181,18 @@ body {
   /* Removed box-shadow and other inconsistent styles */
 }
 
-/* Section Headers */
+/* Other heading updates */
 .code-display h3, 
 .code-input h3,
 .join-section h3,
-.game-info h3 {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
+.game-info h3,
+.player-name-container h3,
+.color-carousel h3 {
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
   margin-bottom: 15px;
-  color: #4dc9ff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  color: #0066cc;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
   text-align: center;
 }
 
@@ -182,6 +204,7 @@ body {
   justify-content: center;
   gap: 10px;
   margin-bottom: 10px;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .code {
@@ -208,7 +231,8 @@ input {
   background-color: transparent;
   border: 2px solid #4dc9ff;
   color: white;
-  font-family: 'Exo 2', sans-serif;
+  font-family: Arial, sans-serif;
+  font-weight: bold;
   font-size: 1.2rem;
   text-align: center;
   margin-bottom: 10px;
@@ -228,7 +252,7 @@ input:focus {
 
 /* Game Buttons - update all to use the pink color */
 .game-btn {
-  font-family: 'Exo 2', sans-serif;
+  font-family: Arial, sans-serif;
   font-weight: bold;
   font-size: 1rem;
   padding: 15px 25px;
@@ -238,7 +262,7 @@ input:focus {
   transition: all 0.2s ease;
   text-transform: uppercase;
   position: relative;
-  box-shadow: 0 6px 0 #7a003c, 0 8px 10px rgba(0, 0, 0, 0.5); /* Updated shadow color */
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .game-btn:active {
@@ -299,7 +323,7 @@ input:focus {
   border-radius: 3px;
   padding: 8px 12px;
   cursor: pointer;
-  font-family: 'Exo 2', sans-serif;
+  font-family: Arial, sans-serif;
   font-weight: bold;
   font-size: 0.8rem;
 }
@@ -310,11 +334,11 @@ input:focus {
 }
 
 .game-info h3 {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
+  font-family: 'Arial Black', Arial, sans-serif;
+  font-weight: 900;
   margin-bottom: 15px;
-  color: #4dc9ff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  color: #0066cc;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
   text-align: center;
 }
 
@@ -324,12 +348,13 @@ input:focus {
   padding: 20px;
   border: 1px solid rgba(77, 201, 255, 0.3);
   text-align: center;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Map Info */
 .map-info {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
+  font-family: Arial, sans-serif;
+  font-weight: bold;
   color: #fff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
   margin-bottom: 15px;
@@ -353,6 +378,7 @@ input:focus {
   padding: 10px;
   border: 1px solid rgba(77, 201, 255, 0.3);
   margin-bottom: 20px;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .player-list {
@@ -368,14 +394,16 @@ input:focus {
   display: flex;
   align-items: center;
   transition: all 0.2s ease;
+  font-family: Arial, sans-serif;
+  font-weight: bold;
 }
 
 /* Host Badge */
 .host-badge {
   background-color: #ff0080;
   color: white;
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
+  font-family: Arial, sans-serif;
+  font-weight: bold;
   font-size: 0.8rem;
   padding: 5px 10px;
   border-radius: 50px;
@@ -394,15 +422,6 @@ input:focus {
   margin-top: 20px;
 }
 
-.join-section h3 {
-  font-family: 'Exo 2', sans-serif;
-  font-weight: 700;
-  margin-bottom: 15px;
-  color: #4dc9ff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-  text-align: center;
-}
-
 .status-message {
   color: #ff0080;
   font-size: 0.9rem;
@@ -415,13 +434,6 @@ input:focus {
 .color-carousel {
   text-align: center;
   margin: 00px 0;
-}
-
-.color-carousel h3 {
-  font-family: 'Exo 2', sans-serif;
-  color: #4dc9ff;
-  margin-bottom: 10px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 .color-options {
