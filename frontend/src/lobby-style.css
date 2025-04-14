@@ -9,6 +9,7 @@ body {
   font-family: 'Poppins', sans-serif;
   color: black;
   height: 100vh;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,7 +175,7 @@ body {
   font-weight: 900;
   font-size: 1.2rem; /* Larger text size */
   width: 100%; /* Full width for all buttons */
-  max-width: 400px; /* Maximum width */
+  max-width: 250px; /* Maximum width */
   height: 60px;
   border: 3px solid #b30059; /* Darker outline */
   background-color: #ff0080; /* Solid pink background */
@@ -491,4 +492,45 @@ input::placeholder {
 /* Utilities */
 .hidden {
   display: none !important;
+}
+
+/* Personal website link button */
+.website-link-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #ff0080;
+  border: 2px solid #b30059;
+  box-shadow: 0 3px 0 #b30059;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.2s ease;
+}
+
+.website-link-btn:hover {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b30059;
+}
+
+.website-link-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #b30059;
+}
+
+/* Create a link icon using ::before */
+.website-link-btn::before {
+  content: ""; 
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M10 6v2H5v11h11v-5h2v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6zm11-3v8h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
