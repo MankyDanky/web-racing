@@ -6,7 +6,7 @@
 
 /* Update body with diagonal stripes that scroll right */
 body {
-  font-family: Arial, sans-serif;
+  font-family: 'Poppins', sans-serif;
   color: black;
   height: 100vh;
   overflow: hidden;
@@ -53,28 +53,28 @@ body {
 
 /* Game title updates */
 .game-title {
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: 900;
   font-size: 4rem;
   text-transform: uppercase;
-  color: #0066cc;
+  color: #ffffff;
+  -webkit-text-stroke: 3px #000;
   letter-spacing: 4px;
   margin: 0;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  text-shadow: 0px 5px 0px rgb(0, 0, 0);
 }
 
 /* Main Content Area */
 .game-content {
   display: flex;
   flex: 1;
-  gap: 20px;
   position: relative;
+  background: transparent;
 }
 
 /* Keep the game panels with some transparency */
 .game-panel {
   flex: 0 0 25%;
-  background: rgba(240, 240, 240, 0.7);
   border-radius: 10px;
   position: relative;
   overflow: hidden;
@@ -87,16 +87,14 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: auto; /* Allow scrolling if content overflows */
-  background-color: transparent;
 }
-
-/* Panel title updates */
+/* Panel title updates to match game title */
 .panel-title {
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family:'Poppins', sans-serif;
   font-weight: 900;
   margin-bottom: 20px;
-  color: #0066cc;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  -webkit-text-stroke: 2px #000;
   text-align: center;
   font-size: 2rem;
 }
@@ -107,15 +105,17 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start; /* Changed from center to flex-start */
-  padding: 20px 0;
-  gap: 20px; /* Add gap between elements */
+  justify-content: flex-start;
+  padding: 25px; /* Match panel-content padding */
+  gap: 10px;
+  overflow: hidden; /* Match game-panel overflow */
+  max-height: 80vh; /* Match game-panel max-height */
 }
 
 /* Car model container takes up less space */
 #car-model-container {
   width: 100%;
-  height: 50%; /* Reduced from 80% to 50% */
+  height: 45%; /* Adjust height to fit within the new container */
   position: relative;
   margin-bottom: 0; /* Removed margin since we're using gap */
 }
@@ -128,41 +128,95 @@ body {
 }
 
 .player-name-container h3 {
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family:'Poppins', sans-serif;
   font-weight: 900;
   margin-bottom: 15px;
-  color: #0066cc;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  -webkit-text-stroke: 1px #000;
   text-align: center;
 }
 
 /* Play button in center panel */
 .center-panel .play-btn {
-  width: 400px;
-  font-size: 1.5rem;
-  padding: 15px 0;
-  margin-top: 0;
+  margin-top: auto;
+  margin-bottom: 15px;
 }
 
-/* Keep consistent styling for both play buttons */
-#host-start-btn, #play-btn {
-  background: linear-gradient(to bottom, #ff0080, #b30059);
-  color: white;
+/* Game Buttons - Base styles for all buttons */
+.game-btn, .create-btn, .join-btn, #host-start-btn, #play-btn, .stop-btn {
+  font-family:'Poppins', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem; /* Larger text size */
+  padding: 18px 25px; /* Consistent padding */
+  width: 100%; /* Full width for all buttons */
+  max-width: 400px; /* Maximum width */
+  border: 3px solid #b30059; /* Darker outline */
+  background-color: #ff0080; /* Solid pink background */
   border-radius: 5px;
-  transform: scale(1);
-  box-shadow: 0 8px 0 #7a003c, 0 10px 20px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
   transition: all 0.2s ease;
-  letter-spacing: 1px;
-  margin-bottom: 10px;
+  text-transform: uppercase;
+  position: relative;
+  color: #ffffff; /* White text */
+  -webkit-text-stroke: 1.5px #000; /* Black text outline */
+  text-align: center;
+  margin-bottom: 15px;
+  /* Vertical shadow matching the outline */
+  box-shadow: 0 6px 0 #b30059;
 }
 
-#host-start-btn:hover, #play-btn:hover {
-  transform: scale(1.02);
+/* Button hover effect */
+.game-btn:hover, .create-btn:hover, .join-btn:hover, 
+#host-start-btn:hover, #play-btn:hover, .stop-btn:hover {
+  background-color: #f5007c;
+  transform: translateY(2px);
+  box-shadow: 0 4px 0 #b30059;
 }
 
-#host-start-btn:active, #play-btn:active {
-  transform: scale(1) translateY(6px);
-  box-shadow: 0 2px 0 #7a003c, 0 2px 5px rgba(0, 0, 0, 0.5);
+/* Button active effect */
+.game-btn:active, .create-btn:active, .join-btn:active,
+#host-start-btn:active, #play-btn:active, .stop-btn:active {
+  transform: translateY(6px);
+  box-shadow: 0 0 0 #b30059;
+}
+
+/* Copy button (smaller variant) */
+.icon-btn {
+  background-color: #ff0080;
+  border: 2px solid #b30059;
+  color: white;
+  -webkit-text-stroke: 0.5px #000;
+  border-radius: 3px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 900;
+  font-size: 1rem;
+  box-shadow: 0 3px 0 #b30059;
+}
+
+.icon-btn:hover {
+  background-color: #f5007c;
+  transform: translateY(1px);
+  box-shadow: 0 2px 0 #b30059;
+}
+
+.icon-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #b30059;
+}
+
+/* Remove any specific button styles that would override the above */
+.create-btn {
+  margin-bottom: 20px;
+}
+
+.join-btn {
+  margin-top: 10px;
+}
+
+.stop-btn {
+  margin-top: 20px;
 }
 
 /* Party Code Section */
@@ -181,18 +235,18 @@ body {
   /* Removed box-shadow and other inconsistent styles */
 }
 
-/* Other heading updates */
+/* Other heading updates to match game title */
 .code-display h3, 
 .code-input h3,
 .join-section h3,
 .game-info h3,
 .player-name-container h3,
 .color-carousel h3 {
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family:'Poppins', sans-serif;
   font-weight: 900;
   margin-bottom: 15px;
-  color: #0066cc;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  -webkit-text-stroke: 1px #000;
   text-align: center;
 }
 
@@ -231,7 +285,7 @@ input {
   background-color: transparent;
   border: 2px solid #4dc9ff;
   color: white;
-  font-family: Arial, sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: bold;
   font-size: 1.2rem;
   text-align: center;
@@ -250,95 +304,17 @@ input:focus {
   box-shadow: 0 0 15px rgba(255, 0, 128, 0.5);
 }
 
-/* Game Buttons - update all to use the pink color */
-.game-btn {
-  font-family: Arial, sans-serif;
-  font-weight: bold;
-  font-size: 1rem;
-  padding: 15px 25px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  position: relative;
-  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.game-btn:active {
-  transform: translateY(4px);
-  box-shadow: 0 2px 0 #7a003c, 0 2px 5px rgba(0, 0, 0, 0.5); /* Updated shadow color */
-}
-
-/* Create button - updated to pink */
-.create-btn {
-  background: linear-gradient(to bottom, #ff0080, #b30059);
-  color: white;
-  display: block;
-  width: 100%;
-  margin-bottom: 20px;
-  padding: 20px;
-}
-
-/* Join button - updated to pink */
-.join-btn {
-  background: linear-gradient(to bottom, #ff0080, #b30059);
-  color: white;
-  width: 100%;
-  margin-top: 10px;
-}
-
-/* Play button styling remains the same - it's already pink */
-
-/* Stop hosting button - match create button style, remove hover effects */
-.stop-btn {
-  background: linear-gradient(to bottom, #ff0080, #b30059);
-  color: white;
-  padding: 20px;
-  border-radius: 5px;
-  width: 100%;
-  margin-top: 20px;
-  box-shadow: 0 8px 0 #7a003c, 0 10px 20px rgba(0, 0, 0, 0.5);
-  transition: all 0.2s ease;
-  letter-spacing: 1px;
-  /* Removed transform: scale(1); */
-}
-
-/* Remove hover effect that causes button to grow */
-.stop-btn:hover {
-  /* Removed transform: scale(1.02); */
-}
-
-.stop-btn:active {
-  transform: translateY(6px);
-  box-shadow: 0 2px 0 #7a003c, 0 2px 5px rgba(0, 0, 0, 0.5);
-  /* Removed transform: scale(1) part */
-}
-
-/* Copy button - also updated to match pink theme */
-.icon-btn {
-  background-color: #ff0080;
-  color: white;
-  border: none;
-  border-radius: 3px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-family: Arial, sans-serif;
-  font-weight: bold;
-  font-size: 0.8rem;
-}
-
 /* Game Info Section */
 .game-info {
   margin-bottom: 20px;
 }
 
 .game-info h3 {
-  font-family: 'Arial Black', Arial, sans-serif;
+  font-family:'Poppins', sans-serif;
   font-weight: 900;
   margin-bottom: 15px;
-  color: #0066cc;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  -webkit-text-stroke: 1.5px #000;
   text-align: center;
 }
 
@@ -353,7 +329,7 @@ input:focus {
 
 /* Map Info */
 .map-info {
-  font-family: Arial, sans-serif;
+  font-family:'Poppins', sans-serif;
   font-weight: bold;
   color: #fff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
@@ -394,7 +370,7 @@ input:focus {
   display: flex;
   align-items: center;
   transition: all 0.2s ease;
-  font-family: Arial, sans-serif;
+  font-family:'Poppins', sans-serif;
   font-weight: bold;
 }
 
@@ -402,7 +378,7 @@ input:focus {
 .host-badge {
   background-color: #ff0080;
   color: white;
-  font-family: Arial, sans-serif;
+  font-family: 'Poppins', sans-serif;
   font-weight: bold;
   font-size: 0.8rem;
   padding: 5px 10px;
@@ -434,6 +410,8 @@ input:focus {
 .color-carousel {
   text-align: center;
   margin: 00px 0;
+  width: 100%;
+  max-width: 400px;
 }
 
 .color-options {
@@ -458,7 +436,7 @@ input:focus {
 
 .color-option.active {
   border: 2px solid white;
-  box-shadow: 0 0 10px rgba(77, 201, 255, 0.8);
+  outline: 2px solid black;
 }
 
 /* Utilities */
