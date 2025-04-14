@@ -16,7 +16,7 @@ const SUSPENSION_STIFFNESS = 25;
 const SUSPENSION_DAMPING = 4.0;
 const SUSPENSION_COMPRESSION = 4.0;
 const ROLL_INFLUENCE = 0.05;
-const WHEEL_FRICTION = 120;
+const WHEEL_FRICTION = 50;
 
 // Steering parameters
 const MAX_STEERING_ANGLE = 0.25; // Maximum steering angle in radians
@@ -105,7 +105,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
     wheelInfo.set_m_frictionSlip(WHEEL_FRICTION);
     wheelInfo.set_m_rollInfluence(ROLL_INFLUENCE);
     // Add this new line:
-    wheelInfo.set_m_maxSuspensionTravelCm(SUSPENSION_REST_LENGTH * 200); // 50% more travel
+    wheelInfo.set_m_maxSuspensionTravelCm(SUSPENSION_REST_LENGTH * 150); // 50% more travel
     
     // Add a placeholder for the wheel mesh
     carComponents.wheelMeshes.push(null);
