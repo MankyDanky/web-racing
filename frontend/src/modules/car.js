@@ -13,7 +13,7 @@ const WHEEL_Z_OFFSET = 1.5;
 
 // Physics tuning parameters
 const SUSPENSION_STIFFNESS = 25;
-const SUSPENSION_DAMPING = 4.0;
+const SUSPENSION_DAMPING = 3.0;
 const SUSPENSION_COMPRESSION = 4.0;
 const ROLL_INFLUENCE = 0.05;
 const WHEEL_FRICTION = 50;
@@ -112,9 +112,6 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   }
   
   // Create debug visualization for chassis if debugging is enabled
-  if (debugObjects) {
-    createChassisDebugVisual(ammo, scene, carComponents.carBody, debugObjects);
-  }
   
   // Now load the car model with a callback
   loadCarModel(ammo, scene, carComponents, wheelPositions, (updatedComponents) => {
@@ -319,20 +316,6 @@ function loadFallbackCarModel(ammo, scene, carComponents, wheelPositions, onMode
       console.error('Error loading fallback red car model:', error);
     }
   );
-}
-
-// Create debug visualization for the chassis
-function createChassisDebugVisual(ammo, scene, carBody, debugObjects) {
-  const boxGeometry = new THREE.BoxGeometry(VEHICLE_WIDTH, VEHICLE_HEIGHT, VEHICLE_LENGTH);
-  const boxMaterial = new THREE.MeshBasicMaterial({
-    color: 0xff0000,
-    wireframe: true,
-    opacity: 0.7,
-    transparent: true
-  });
-  const chassisDebug = new THREE.Mesh(boxGeometry, boxMaterial);
-  scene.add(chassisDebug);
-  debugObjects.push({ mesh: chassisDebug, body: carBody, isWheel: false });
 }
 
 // Update steering based on key state
