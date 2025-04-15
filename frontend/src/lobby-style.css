@@ -13,27 +13,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-size: 425px 425px;
-  background-image: repeating-linear-gradient(
-    45deg,
-    #ffffff 0,
-    #ffffff 30px,
-    #f2f2f2 30px,
-    #f2f2f2 60px
-  );
-  animation: slideBackground 10s linear infinite;
 }
-
-/* Animation for scrolling background */
-@keyframes slideBackground {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 425px 0;
-  }
+#background-canvas {
+  filter: brightness(0.5);
 }
-
 /* Game Container */
 .game-container {
   width: 95%;
