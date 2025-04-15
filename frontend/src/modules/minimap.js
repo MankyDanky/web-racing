@@ -261,7 +261,7 @@ export function updateMinimapPlayers(localPlayer, opponents) {
     Object.values(opponents).forEach(opponent => {
       // Only draw if the model exists and is visible
       if (opponent.model && opponent.model.visible) {
-        const { x, y } = worldToMinimap(opponent.model.position.x, opponent.model.position.z);
+        const { x, y } = worldToMinimap(opponent.model.position.x/8, opponent.model.position.z/8);
         
         // Draw white circle for opponents
         minimap.ctx.beginPath();
