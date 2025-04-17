@@ -290,6 +290,7 @@ body {
 }
 
 .code-instructions {
+  color: white;
   font-size: 0.9rem;
   opacity: 0.8;
   margin-top: 10px;
@@ -377,6 +378,7 @@ input::placeholder {
   padding: 15px;
   margin-bottom: 10px;
   border-radius: 8px;
+  color: white;
   display: flex;
   align-items: center;
   transition: all 0.2s ease;
