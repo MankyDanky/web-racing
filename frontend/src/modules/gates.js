@@ -252,7 +252,8 @@ export function showFinishMessage(totalGates, resetCallback) {
   finishText.style.letterSpacing = '10px';
   finishText.style.transform = 'translateX(-100%)';
   finishText.style.display = 'inline-block';
-  finishText.style.transition = 'transform 1s cubic-bezier(0.12, 0.93, 0.27, 0.98)';
+  finishText.style.opacity = '0';
+  finishText.style.transition = 'transform 1s cubic-bezier(0.12, 0.93, 0.27, 0.98), opacity 1s ease';
   finishText.style.padding = '5px 20px';
   finishText.style.userSelect = 'none';
   
@@ -281,6 +282,7 @@ export function showFinishMessage(totalGates, resetCallback) {
   // Trigger the animation
   setTimeout(() => {
     finishText.style.transform = 'translateX(0)';
+    finishText.style.opacity = '1';
     timeContainer.style.opacity = '1';
   }, 100);
   
@@ -294,8 +296,9 @@ export function showFinishMessage(totalGates, resetCallback) {
   // Keep the finish message visible longer
   setTimeout(() => {
     // Animate out
-    finishText.style.transition = 'transform 0.8s cubic-bezier(0.93, 0.06, 1, 0.67)';
+    timeContainer.style.transitionDelay = '0s';
     finishText.style.transform = 'translateX(100%)';
+    finishText.style.opacity = '0';
     timeContainer.style.opacity = '0';
     
     // Remove after animation completes
