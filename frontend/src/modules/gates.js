@@ -217,50 +217,92 @@ export function showFinishMessage(totalGates, resetCallback) {
   // Set the raceFinished state to true
   window.raceState.raceFinished = true;
   
-  // Create finish message UI
-  const finishUI = document.createElement('div');
-  finishUI.style.position = 'absolute';
-  finishUI.style.top = '50%';
-  finishUI.style.left = '50%';
-  finishUI.style.transform = 'translate(-50%, -50%)';
-  finishUI.style.background = 'rgba(0, 0, 0, 0.8)';
-  finishUI.style.color = '#4dc9ff';
-  finishUI.style.padding = '20px';
-  finishUI.style.borderRadius = '10px';
-  finishUI.style.fontFamily = "'Exo 2', sans-serif";
-  finishUI.style.fontSize = '24px';
-  finishUI.style.textAlign = 'center';
-  finishUI.style.zIndex = '1000';
+  // Hide speedometer
+  const speedometer = document.getElementById('speedometer');
+  if (speedometer) {
+    speedometer.style.opacity = '0';
+    speedometer.style.transition = 'opacity 0.5s ease';
+  }
   
-  // Show race completion time
+  // Get race completion time
   const raceTimer = document.querySelector('div[style*="position: absolute"][style*="top: 20px"][style*="left: 50%"]');
   const finalTime = raceTimer ? raceTimer.innerText : "00:00";
   
-  // Add special text for multiplayer mode
-  const spectatorText = window.raceState.isMultiplayer ? 
-    '<p>Entering spectator mode...</p>' : '';
+  // Create the FINISH text container
+  const finishUI = document.createElement('div');
+  finishUI.style.position = 'absolute';
+  finishUI.style.top = '50%';
+  finishUI.style.left = '0';
+  finishUI.style.right = '0';
+  finishUI.style.transform = 'translateY(-50%)';
+  finishUI.style.textAlign = 'center';
+  finishUI.style.zIndex = '1000';
   
-  finishUI.innerHTML = `
-    <h2>Race Complete!</h2>
-    <p>You passed through all ${totalGates} gates!</p>
-    <p>Final time: ${finalTime}</p>
-    ${spectatorText}
-  `;
+  // Create the animated FINISH text
+  const finishText = document.createElement('div');
+  finishText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  finishText.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  finishText.style.borderRadius = '10px';
+  finishText.textContent = 'FINISH';
+  finishText.style.fontFamily = "'Exo 2', sans-serif";
+  finishText.style.fontWeight = '900';
+  finishText.style.fontSize = '120px';
+  finishText.style.color = '#ff0080';
+  finishText.style.textShadow = '0 0 20px rgba(255, 0, 128, 0.7)';
+  finishText.style.letterSpacing = '10px';
+  finishText.style.transform = 'translateX(-100%)';
+  finishText.style.display = 'inline-block';
+  finishText.style.transition = 'transform 1s cubic-bezier(0.12, 0.93, 0.27, 0.98)';
+  finishText.style.padding = '5px 20px';
+  finishText.style.userSelect = 'none';
   
+  // Create time display
+  const timeContainer = document.createElement('div');
+  timeContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  timeContainer.style.borderRadius = '10px';
+  timeContainer.style.padding = '5px 20px';
+  timeContainer.style.width = 'fit-content';
+  timeContainer.style.margin = '0 auto';
+  timeContainer.style.marginTop = '30px';
+  timeContainer.style.fontSize = '36px';
+  timeContainer.style.fontWeight = 'bold';
+  timeContainer.style.color = '#ffffff';
+  timeContainer.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+  timeContainer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  timeContainer.style.opacity = '0';
+  timeContainer.style.transition = 'opacity 1s ease';
+  timeContainer.style.transitionDelay = '1s';
+  timeContainer.textContent = `TIME: ${finalTime}`;
+  
+  finishUI.appendChild(finishText);
+  finishUI.appendChild(timeContainer);
   document.body.appendChild(finishUI);
+  
+  // Trigger the animation
+  setTimeout(() => {
+    finishText.style.transform = 'translateX(0)';
+    timeContainer.style.opacity = '1';
+  }, 100);
   
   // Enter spectator mode in multiplayer after showing finish message
   if (window.raceState.isMultiplayer && window.enterSpectatorMode) {
     setTimeout(() => {
       window.enterSpectatorMode();
-    }, 2000);
+    }, 3000);
   }
   
-  // Auto-remove the message after 5 seconds
+  // Keep the finish message visible longer
   setTimeout(() => {
-    // Remove the finish UI
-    document.body.removeChild(finishUI);
-  }, 5000);
+    // Animate out
+    finishText.style.transition = 'transform 0.8s cubic-bezier(0.93, 0.06, 1, 0.67)';
+    finishText.style.transform = 'translateX(100%)';
+    timeContainer.style.opacity = '0';
+    
+    // Remove after animation completes
+    setTimeout(() => {
+      document.body.removeChild(finishUI);
+    }, 1000);
+  }, 4000);
   
   return finishUI;
 }

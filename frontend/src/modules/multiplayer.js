@@ -12,6 +12,10 @@ const state = {
   allPlayers: []
 };
 
+// Add these variables at the top of the file
+let connectionRetryCount = 0;
+const MAX_RETRIES = 15; // Try for 30 seconds
+
 // Initialize multiplayer from game config
 export function initMultiplayer(gameState) {
   try {
@@ -94,19 +98,46 @@ function initPeerConnection(gameState) {
           if (hostPlayer) {
             console.log('Connecting to host:', hostPlayer.id);
             
-            // Connect to host using original ID
-            const conn = state.peer.connect(hostPlayer.id);
+            // Define a function to attempt connection with retry
+            function attemptConnection() {
+              console.log(`Connection attempt ${connectionRetryCount + 1} to host: ${hostPlayer.id}`);
+              
+              // Connect to host
+              const conn = state.peer.connect(hostPlayer.id);
+              let connectionSuccessful = false;
+              
+              // Set a timeout to retry if connection doesn't complete
+              const connectionTimeout = setTimeout(() => {
+                if (!connectionSuccessful) {
+                  console.log("Connection attempt timed out");
+                  connectionRetryCount++;
+                  if (connectionRetryCount < MAX_RETRIES) {
+                    console.log(`Retrying connection in 2 seconds... (attempt ${connectionRetryCount + 1})`);
+                    setTimeout(attemptConnection, 2000);
+                  } else {
+                    console.error(`Failed to connect after ${MAX_RETRIES} attempts`);
+                  }
+                }
+              }, 5000); // Wait 5 seconds for connection to complete
+              
+              conn.on('open', () => {
+                console.log('Connected to host!');
+                connectionSuccessful = true;
+                clearTimeout(connectionTimeout);
+                connectionRetryCount = 0; // Reset counter on success
+                state.playerConnections.push(conn);
+                setupMessageHandlers(conn, gameState);
+                loadOpponentCarModels(gameState.scene);
+              });
+              
+              conn.on('error', (err) => {
+                console.error('Error connecting to host:', err);
+                // Error handling already covered by the timeout
+              });
+            }
             
-            conn.on('open', () => {
-              console.log('Connected to host!');
-              state.playerConnections.push(conn);
-              setupMessageHandlers(conn, gameState);
-              loadOpponentCarModels(gameState.scene);
-            });
-            
-            conn.on('error', (err) => {
-              console.error('Error connecting to host:', err);
-            });
+            // Start the first connection attempt
+            attemptConnection();
           } else {
             console.error('No host player found in game config');
           }

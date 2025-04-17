@@ -19,9 +19,9 @@ const ROLL_INFLUENCE = 0.05;
 const WHEEL_FRICTION = 50;
 
 // Steering parameters
-const MAX_STEERING_ANGLE = 0.25; // Maximum steering angle in radians
-const STEERING_SPEED = 2;    // Speed of steering adjustment
-const STEERING_RETURN_SPEED = 2; // Speed of returning to center
+const MAX_STEERING_ANGLE = 0.25;
+const STEERING_SPEED = 2;  
+const STEERING_RETURN_SPEED = 2; 
 
 // Modify createVehicle to accept a callback for when the car is fully loaded
 export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoaded) {
@@ -56,7 +56,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   );
   
   carComponents.carBody = new ammo.btRigidBody(chassisRbInfo);
-  carComponents.carBody.setActivationState(4); // DISABLE_DEACTIVATION
+  carComponents.carBody.setActivationState(4); 
   physicsWorld.addRigidBody(carComponents.carBody);
   
   // Create vehicle raycaster
@@ -104,14 +104,11 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
     wheelInfo.set_m_wheelsDampingCompression(SUSPENSION_COMPRESSION);
     wheelInfo.set_m_frictionSlip(WHEEL_FRICTION);
     wheelInfo.set_m_rollInfluence(ROLL_INFLUENCE);
-    // Add this new line:
-    wheelInfo.set_m_maxSuspensionTravelCm(SUSPENSION_REST_LENGTH * 150); // 50% more travel
+    wheelInfo.set_m_maxSuspensionTravelCm(SUSPENSION_REST_LENGTH * 150); 
     
     // Add a placeholder for the wheel mesh
     carComponents.wheelMeshes.push(null);
   }
-  
-  // Create debug visualization for chassis if debugging is enabled
   
   // Now load the car model with a callback
   loadCarModel(ammo, scene, carComponents, wheelPositions, (updatedComponents) => {
