@@ -7,7 +7,7 @@ const VEHICLE_HEIGHT = 0.6;
 const VEHICLE_LENGTH = 4.0;
 const WHEEL_RADIUS = 0.4;
 const WHEEL_WIDTH = 0.25;
-const SUSPENSION_REST_LENGTH = 0.5;
+const SUSPENSION_REST_LENGTH = 0.3;
 const WHEEL_X_OFFSET = 0.8;
 const WHEEL_Z_OFFSET = 1.5;
 
@@ -74,10 +74,10 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   
   // Add all four wheels
   const wheelPositions = [
-    { x: -WHEEL_X_OFFSET, y: 0.2, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Lowered y value
-    { x: WHEEL_X_OFFSET, y: 0.2, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  
-    { x: -WHEEL_X_OFFSET, y: 0.2, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, 
-    { x: WHEEL_X_OFFSET, y: 0.2, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  
+    { x: -WHEEL_X_OFFSET, y: 0, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Lowered y value
+    { x: WHEEL_X_OFFSET, y: 0, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  
+    { x: -WHEEL_X_OFFSET, y: 0, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, 
+    { x: WHEEL_X_OFFSET, y: 0, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  
   ];
   
   // Create wheels with physics (but without visuals yet)

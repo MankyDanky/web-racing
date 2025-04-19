@@ -197,6 +197,7 @@ export function checkGateProximity(carModel, gateData) {
     
     // If this is the finish gate
     if (gate.userData.isFinish) {
+      gateData.currentGateIndex++;
       return true; // Signal race is finished
     } else {
       // Move to next gate
@@ -228,6 +229,16 @@ export function showFinishMessage(totalGates, resetCallback) {
   const raceTimer = document.querySelector('div[style*="position: absolute"][style*="top: 20px"][style*="left: 50%"]');
   const finalTime = raceTimer ? raceTimer.innerText : "00:00";
   
+  // Store the finish time in player positions for leaderboard
+  if (window.playerPositions) {
+    const myPlayerId = localStorage.getItem('myPlayerId');
+    const myPlayerIndex = window.playerPositions.findIndex(p => p.id === myPlayerId);
+    
+    if (myPlayerIndex !== -1) {
+      window.playerPositions[myPlayerIndex].finishTime = finalTime;
+    }
+  }
+  
   // Create the FINISH text container
   const finishUI = document.createElement('div');
   finishUI.style.position = 'absolute';
@@ -241,7 +252,7 @@ export function showFinishMessage(totalGates, resetCallback) {
   // Create the animated FINISH text
   const finishText = document.createElement('div');
   finishText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-  finishText.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  finishText.style.boxShadow = '0 0 20px hsla(0, 0.00%, 0.00%, 0.50)';
   finishText.style.borderRadius = '10px';
   finishText.textContent = 'FINISH';
   finishText.style.fontFamily = "'Exo 2', sans-serif";
@@ -290,7 +301,7 @@ export function showFinishMessage(totalGates, resetCallback) {
   if (window.raceState.isMultiplayer && window.enterSpectatorMode) {
     setTimeout(() => {
       window.enterSpectatorMode();
-    }, 3000);
+    }, 4000);
   }
   
   // Keep the finish message visible longer
@@ -304,6 +315,12 @@ export function showFinishMessage(totalGates, resetCallback) {
     // Remove after animation completes
     setTimeout(() => {
       document.body.removeChild(finishUI);
+      
+      // IMPORTANT CHANGE: Only show final leaderboard in single player mode here
+      // For multiplayer, we'll let the main animation loop handle it when all players finish
+      if (!window.raceState.isMultiplayer && window.showFinalLeaderboard) {
+        window.showFinalLeaderboard();
+      }
     }, 1000);
   }, 4000);
   

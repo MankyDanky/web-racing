@@ -126,6 +126,10 @@ let activeRacers = [];
 // Add this variable to your global variables section
 let minimapState;
 
+// Add this to the global variables section:
+let finishedPlayers = new Set();
+let finalLeaderboardShown = false;
+
 // Add these functions before init():
 
 // Create the waiting and countdown UI elements
@@ -672,6 +676,169 @@ function updateSpectatorCamera() {
   camera.lookAt(lookAtPos);
 }
 
+// Add this function to main.js
+function showFinalLeaderboard() {
+  // Hide all existing UI elements
+  if (speedometer) speedometer.style.display = 'none';
+  if (raceTimer) raceTimer.style.display = 'none';
+  if (leaderboard) leaderboard.style.display = 'none';
+  if (spectatorUI) spectatorUI.style.display = 'none';
+  if (minimapState && minimapState.canvas) minimapState.canvas.style.display = 'none';
+  
+  // Create final leaderboard container
+  const finalLeaderboard = document.createElement('div');
+  finalLeaderboard.style.position = 'absolute';
+  finalLeaderboard.style.top = '50%';
+  finalLeaderboard.style.left = '50%';
+  finalLeaderboard.style.transform = 'translate(-50%, -50%)';
+  finalLeaderboard.style.background = 'rgba(0, 0, 0, 0.5)';
+  finalLeaderboard.style.backdropFilter = 'blur(10px)';
+  finalLeaderboard.style.color = '#fff';
+  finalLeaderboard.style.padding = '40px';
+  finalLeaderboard.style.borderRadius = '15px';
+  finalLeaderboard.style.fontFamily = "'Exo 2', sans-serif";
+  finalLeaderboard.style.fontSize = '20px';
+  finalLeaderboard.style.textAlign = 'center';
+  finalLeaderboard.style.zIndex = '2000';
+  finalLeaderboard.style.minWidth = '400px';
+  finalLeaderboard.style.boxShadow = '0 0 30px rgba(0, 0, 0, 0.7)';
+  finalLeaderboard.style.opacity = '0';
+  finalLeaderboard.style.transform = 'translate(-150%, -50%)'; // Start off-screen to the left
+  finalLeaderboard.style.transition = 'transform 1s cubic-bezier(0.12, 0.93, 0.27, 0.98), opacity 1s ease';
+  
+  // Create title
+  const title = document.createElement('h2');
+  title.textContent = 'RACE RESULTS';
+  title.style.fontSize = '36px';
+  title.style.fontWeight = '900';
+  title.style.marginBottom = '30px';
+  title.style.color = '#ffffff';
+  title.style.textShadow = '0 0 15px rgba(255, 255, 255, 0.5)';
+  title.style.letterSpacing = '3px';
+  
+  // Sort players by finish position (if present), then by gates passed
+  const sortedPlayers = [...playerPositions].sort((a, b) => {
+    return (b.gateIndex - a.gateIndex) || (a.distanceToNextGate - b.distanceToNextGate);
+  });
+  
+  // Create leaderboard table
+  const table = document.createElement('table');
+  table.style.width = '100%';
+  table.style.borderCollapse = 'collapse';
+  table.style.marginBottom = '30px';
+  
+  // Add header row
+  const headerRow = document.createElement('tr');
+  headerRow.innerHTML = `
+    <th style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.3);">POSITION</th>
+    <th style="padding: 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.3);">PLAYER</th>
+    <th style="padding: 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.3);">TIME</th>
+  `;
+  table.appendChild(headerRow);
+  
+  // Add player rows
+  sortedPlayers.forEach((player, index) => {
+    const row = document.createElement('tr');
+    
+    // Determine position indicator and style
+    const positionLabel = getPositionLabel(index + 1);
+    const positionColor = getPositionColor(index + 1);
+    
+    // Determine if player finished (reached last gate)
+    const hasFinished = player.gateIndex >= gateData.totalGates - 1;
+    const timeDisplay = hasFinished ? player.finishTime || "00:00" : "DNF";
+    
+    row.innerHTML = `
+      <td style="padding: 12px; text-align: center; color: ${positionColor}; font-weight: bold;">${positionLabel}</td>
+      <td style="padding: 12px; text-align: left;">
+        <div style="display: flex; align-items: center;">
+          <div style="width: 15px; height: 15px; background-color: ${getPlayerColorHex(player.color)}; margin-right: 10px; border-radius: 50%;"></div>
+          ${player.name}
+        </div>
+      </td>
+      <td style="padding: 12px; text-align: right; font-weight: ${hasFinished ? 'bold' : 'normal'}; color: ${hasFinished ? '#ffffff' : '#aaaaaa'};">${timeDisplay}</td>
+    `;
+    
+    table.appendChild(row);
+  });
+  
+  // Create home button
+  const homeButton = document.createElement('button');
+  homeButton.textContent = 'HOME';
+  homeButton.style.fontFamily = "'Poppins', sans-serif";
+  homeButton.style.fontWeight = '900';
+  homeButton.style.fontSize = '1.1rem';
+  homeButton.style.padding = '10px 30px';
+  homeButton.style.backgroundColor = '#ff0080';
+  homeButton.style.border = '2px solid #b30059';
+  homeButton.style.color = 'white';
+  homeButton.style.webkitTextStroke = '1px #b30059';
+  homeButton.style.borderRadius = '5px';
+  homeButton.style.cursor = 'pointer';
+  homeButton.style.boxShadow = '0 4px 0 #b30059';
+  homeButton.style.transition = 'all 0.2s ease';
+  homeButton.style.marginTop = '10px';
+  
+  // Add hover and active effects using event listeners
+  homeButton.addEventListener('mouseover', () => {
+    homeButton.style.backgroundColor = '#f5007c';
+    homeButton.style.transform = 'translateY(2px)';
+    homeButton.style.boxShadow = '0 2px 0 #b30059';
+  });
+  
+  homeButton.addEventListener('mouseout', () => {
+    homeButton.style.backgroundColor = '#ff0080';
+    homeButton.style.transform = 'translateY(0)';
+    homeButton.style.boxShadow = '0 4px 0 #b30059';
+  });
+  
+  homeButton.addEventListener('mousedown', () => {
+    homeButton.style.transform = 'translateY(4px)';
+    homeButton.style.boxShadow = '0 0 0 #b30059';
+  });
+  
+  homeButton.addEventListener('mouseup', () => {
+    homeButton.style.transform = 'translateY(2px)';
+    homeButton.style.boxShadow = '0 2px 0 #b30059';
+  });
+  
+  // Add click handler to return to lobby
+  homeButton.addEventListener('click', () => {
+    window.location.href = 'index.html';
+  });
+  
+  // Assemble final leaderboard
+  finalLeaderboard.appendChild(title);
+  finalLeaderboard.appendChild(table);
+  finalLeaderboard.appendChild(homeButton);
+  document.body.appendChild(finalLeaderboard);
+  
+  // Trigger the animation after a short delay
+  setTimeout(() => {
+    finalLeaderboard.style.opacity = '1';
+    finalLeaderboard.style.transform = 'translate(-50%, -50%)';
+  }, 100);
+  
+  return finalLeaderboard;
+}
+
+// Helper function to convert player color name to hex color
+function getPlayerColorHex(colorName) {
+  const colorMap = {
+    red: '#ff7070',
+    orange: '#ffb766',
+    yellow: '#ffffa7',
+    green: '#429849',
+    blue: '#447bc9',
+    indigo: '#cc57d0',
+    violet: '#7c37b1'
+  };
+  return colorMap[colorName] || '#ff7070';
+}
+
+// Make this function available globally
+window.showFinalLeaderboard = showFinalLeaderboard;
+
 // Initialize everything
 function init() {
   console.log("Main module loaded");
@@ -1010,6 +1177,17 @@ function animate() {
     
     // Update leaderboard
     updateLeaderboard();
+
+    // Check if all players have finished the race
+    if (raceState.isMultiplayer && raceState.raceStarted && !finalLeaderboardShown) {
+      const allFinished = checkAllPlayersFinished();
+      
+      if (allFinished) {
+        finalLeaderboardShown = true;
+        // Wait a moment to show the final leaderboard (after individual finish messages fade)
+        setTimeout(showFinalLeaderboard, 5000);
+      }
+    }
   }
   
   renderer.render(scene, camera);
@@ -1064,6 +1242,42 @@ function updateSpeedometer(speed) {
   
   // Update the numeric display, rounded to integer
   speedValueElement.textContent = Math.round(currentSpeed);
+}
+
+// Add this new function to check if all players have finished
+function checkAllPlayersFinished() {
+  // If no multiplayer or no players, return false
+  if (!raceState.isMultiplayer || !multiplayerState || !allPlayers || allPlayers.length === 0) {
+    return false;
+  }
+  
+  // Count active players (excluding disconnected ones)
+  let activePlayers = 0;
+  let finishedCount = 0;
+  
+  // Count myself if I've finished
+  if (raceState.raceFinished) {
+    finishedCount++;
+  }
+  activePlayers++; // Always count myself as active
+  
+  // Check opponents
+  Object.values(multiplayerState.opponentCars).forEach(opponent => {
+    // Only count opponents that are active (have been updated recently)
+    const isActive = opponent.lastUpdate && (Date.now() - opponent.lastUpdate < 10000);
+    
+    if (isActive) {
+      activePlayers++;
+      
+      // Check if this opponent has finished
+      if (opponent.raceProgress && opponent.raceProgress.currentGateIndex >= gateData.totalGates) {
+        finishedCount++;
+      }
+    }
+  });
+  console.log(`Active players: ${activePlayers}, Finished count: ${finishedCount}`); 
+  // All players have finished when finished count equals active players
+  return finishedCount === activePlayers && activePlayers > 0;
 }
 
 // Start initialization
