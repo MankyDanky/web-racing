@@ -12,11 +12,11 @@ const WHEEL_X_OFFSET = 0.8;
 const WHEEL_Z_OFFSET = 1.5;
 
 // Physics tuning parameters
-const SUSPENSION_STIFFNESS = 25;
-const SUSPENSION_DAMPING = 3.0;
+const SUSPENSION_STIFFNESS = 10;
+const SUSPENSION_DAMPING = 0.3;
 const SUSPENSION_COMPRESSION = 4.0;
-const ROLL_INFLUENCE = 0.05;
-const WHEEL_FRICTION = 50;
+const ROLL_INFLUENCE = 0.0;
+const WHEEL_FRICTION = 10;
 
 // Steering parameters
 const MAX_STEERING_ANGLE = 0.25;

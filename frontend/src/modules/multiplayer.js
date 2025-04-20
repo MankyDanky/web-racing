@@ -9,7 +9,9 @@ const state = {
   opponentCars: {},
   gameConfig: null,
   isHost: false,
-  allPlayers: []
+  allPlayers: [],
+  allCarsData: {}, // Add this property to store all car positions
+  lastBroadcastTime: 0 // Track when we last broadcasted
 };
 
 // Add these variables at the top of the file
@@ -177,10 +179,9 @@ function setupMessageHandlers(conn, gameState) {
     }
   }
   
-  // Handle incoming data with enhanced logging
+  // Update the message handler in setupMessageHandlers function
   conn.on('data', (data) => {
     try {
-      
       if (data.type === 'connectionTest') {
         console.log('Connection test message received!');
         // Send acknowledgment
@@ -190,8 +191,25 @@ function setupMessageHandlers(conn, gameState) {
           timestamp: Date.now()
         });
       } else if (data.type === 'carUpdate') {
-        // Update the appropriate opponent car
+        // If host, store the car data for broadcasting later
+        if (state.isHost) {
+          state.allCarsData[conn.peer] = data;
+        }
+        // Update the opponent car position locally
         updateOpponentCarPosition(conn.peer, data);
+      } else if (data.type === 'carUpdateAll') {
+        // Client receives all car data from host
+        if (!state.isHost && data.cars) {
+          console.log(`Received positions for ${Object.keys(data.cars).length} cars`);
+          // Update all car positions
+          Object.entries(data.cars).forEach(([playerId, carData]) => {
+            // Skip my own car
+            if (playerId === state.peer.id) return;
+            
+            // Update this opponent car
+            updateOpponentCarPosition(playerId, carData);
+          });
+        }
       } else if (data.type === 'countdownStart') {
         console.log("🚦 COUNTDOWN START RECEIVED - starting countdown! 🚦");
         // Start countdown for all players simultaneously
@@ -225,67 +243,6 @@ function setupMessageHandlers(conn, gameState) {
   conn.on('error', (err) => {
     console.error('Connection error with', conn.peer, ':', err);
   });
-}
-
-// Improved player connection handler
-function handlePlayerConnection(conn, gameState) {
-  // Handle incoming data from any player
-  conn.on('data', (data) => {
-    if (data.type === 'carUpdate') {
-      // Update the appropriate opponent car
-      updateOpponentCarPosition(conn.peer, data);
-    } else if (data.type === 'countdownStart') {
-        console.log("Received countdown start from player:", conn.peer);
-      // Start countdown for all players simultaneously
-      if (window.startCountdown) {
-        window.startCountdown();
-      }
-    } else if (data.type === 'raceStart') {
-      // Fallback/backup for race start message
-      if (!window.raceState.raceStarted) {
-        // Force race to start if countdown was started but race hasn't started yet
-        window.raceState.raceStarted = true;
-      }
-    }
-  });
-  
-  // If we're the host, we need to relay updates to all players
-  if (state.isHost) {
-    conn.on('data', (data) => {
-      // Relay this player's position to all other players
-      state.playerConnections.forEach(otherConn => {
-        if (otherConn.peer !== conn.peer) {
-          otherConn.send(data);
-        }
-      });
-    });
-  }
-  
-  // Handle connection closing
-  conn.on('close', () => {
-    console.log('Player disconnected:', conn.peer);
-    // Remove from connections list
-    state.playerConnections = state.playerConnections.filter(c => c.peer !== conn.peer);
-  });
-  
-  // Send initial state to the newly connected player
-  if (gameState.carModel && state.isHost) {
-    conn.send({
-      type: 'carUpdate',
-      playerId: state.peer.id,
-      position: {
-        x: gameState.carModel.position.x,
-        y: gameState.carModel.position.y,
-        z: gameState.carModel.position.z
-      },
-      quaternion: {
-        x: gameState.carModel.quaternion.x,
-        y: gameState.carModel.quaternion.y,
-        z: gameState.carModel.quaternion.z,
-        w: gameState.carModel.quaternion.w
-      }
-    });
-  }
 }
 
 // Load opponent car models for all players
@@ -494,11 +451,9 @@ export function updateOpponentCarPosition(playerId, data) {
       opponent.raceProgress = {};
     }
     
-    // CRITICAL FIX: Explicitly assign each property rather than the whole object
     opponent.raceProgress.currentGateIndex = Number(data.raceProgress.currentGateIndex);
     opponent.raceProgress.distanceToNextGate = Number(data.raceProgress.distanceToNextGate);
     
-    // Add player name and color if available
     if (data.playerName) {
       opponent.name = data.playerName;
     }
@@ -528,9 +483,9 @@ export function updateMarkers() {
   });
 }
 
-// Modify the sendCarData function to include gate progress
+// Modify the sendCarData function
 export function sendCarData(gameState) {
-  if (!gameState.carModel || !state.peer || state.playerConnections.length === 0) return;
+  if (!gameState.carModel || !state.peer) return;
   
   // Get the current player ID
   const myPlayerId = localStorage.getItem('myPlayerId');
@@ -613,17 +568,28 @@ export function sendCarData(gameState) {
     }
   };
   
-  // Send to all connected players
-  state.playerConnections.forEach(conn => {
-    try {
-      // Check if connection is open before sending
-      if (conn && conn.open) {
-        conn.send(carData);
-      }
-    } catch (err) {
-      console.error('Error sending car data:', err);
+  // Handle differently based on if we're host or client
+  if (state.isHost) {
+    // Store host's own car data for broadcasting
+    state.allCarsData[myPlayerId] = carData;
+    
+    // Broadcast all car data at a reasonable interval (50ms = 20 updates/sec)
+    if (!state.lastBroadcastTime || Date.now() - state.lastBroadcastTime >= 50) {
+      broadcastAllCarsData();
     }
-  });
+  } else {
+    // For clients, just send their own car data to the host
+    state.playerConnections.forEach(conn => {
+      try {
+        // Check if connection is open before sending
+        if (conn && conn.open) {
+          conn.send(carData);
+        }
+      } catch (err) {
+        console.error('Error sending car data:', err);
+      }
+    });
+  }
 }
 
 // Add method to check if all players are connected
@@ -688,4 +654,30 @@ export function broadcastCountdownStart() {
     }
   });
   
+}
+
+// Add this function to broadcast all car positions from host to clients
+function broadcastAllCarsData() {
+  if (!state.isHost || state.playerConnections.length === 0) return;
+  
+  // Create the broadcast packet
+  const broadcastPacket = {
+    type: 'carUpdateAll',
+    timestamp: Date.now(),
+    cars: state.allCarsData
+  };
+  
+  // Send to all connected players
+  state.playerConnections.forEach(conn => {
+    try {
+      if (conn && conn.open) {
+        conn.send(broadcastPacket);
+      }
+    } catch (err) {
+      console.error('Error broadcasting all cars data:', err);
+    }
+  });
+  
+  // Update the last broadcast time
+  state.lastBroadcastTime = Date.now();
 }
