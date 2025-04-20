@@ -5,18 +5,18 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const VEHICLE_WIDTH = 2.0;
 const VEHICLE_HEIGHT = 0.6;
 const VEHICLE_LENGTH = 4.0;
-const WHEEL_RADIUS = 0.4;
+const WHEEL_RADIUS = 0.7;
 const WHEEL_WIDTH = 0.25;
-const SUSPENSION_REST_LENGTH = 0.4;
+const SUSPENSION_REST_LENGTH = 0.3;
 const WHEEL_X_OFFSET = 0.8;
-const WHEEL_Z_OFFSET = 1.5;
+const WHEEL_Z_OFFSET = 1.6;
 
 // Physics tuning parameters
-const SUSPENSION_STIFFNESS = 10;
-const SUSPENSION_DAMPING = 0.3;
+const SUSPENSION_STIFFNESS = 50;
+const SUSPENSION_DAMPING = 10;
 const SUSPENSION_COMPRESSION = 4.0;
 const ROLL_INFLUENCE = 0.0;
-const WHEEL_FRICTION = 5;
+const WHEEL_FRICTION = 10;
 
 // Steering parameters
 const MAX_STEERING_ANGLE = 0.25;
@@ -57,6 +57,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   
   carComponents.carBody = new ammo.btRigidBody(chassisRbInfo);
   carComponents.carBody.setActivationState(4); 
+  carComponents.carBody.setFriction(0);
   physicsWorld.addRigidBody(carComponents.carBody);
   
   // Create vehicle raycaster
