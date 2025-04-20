@@ -16,12 +16,12 @@ const SUSPENSION_STIFFNESS = 10;
 const SUSPENSION_DAMPING = 0.3;
 const SUSPENSION_COMPRESSION = 4.0;
 const ROLL_INFLUENCE = 0.0;
-const WHEEL_FRICTION = 10;
+const WHEEL_FRICTION = 5;
 
 // Steering parameters
 const MAX_STEERING_ANGLE = 0.25;
-const STEERING_SPEED = 2;  
-const STEERING_RETURN_SPEED = 2; 
+const STEERING_SPEED = 1;
+const STEERING_RETURN_SPEED = 1; 
 
 // Modify createVehicle to accept a callback for when the car is fully loaded
 export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoaded) {
