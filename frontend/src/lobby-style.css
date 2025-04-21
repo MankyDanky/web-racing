@@ -574,11 +574,12 @@ input::placeholder {
 }
 
 .dropdown-option {
-  padding: 10px 15px;
+  padding: 8px 12px;
+  text-align: left;
   cursor: pointer;
   font-family: 'Poppins', sans-serif;
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1rem;
   color: #ffffff;
   -webkit-text-stroke: none;
   transition: background-color 0.2s ease;
