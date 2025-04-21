@@ -11,13 +11,11 @@ class RacingLobby {
       this.lastHeartbeat = {}; // Track when we last received a heartbeat from each player
       this.heartbeatInterval = null; // Store the interval for sending heartbeats
       this.connectionCheckInterval = null; // Store the interval for checking connections
-      this.selectedMap = 'map1'; // Default selected map
       
       // Initialize UI elements
       this.initUIElements();
       this.attachEventListeners();
       this.initCarColorCarousel();
-      this.initMapSelector();
       
       // Initialize PeerJS
       this.initPeerJS();
@@ -125,7 +123,7 @@ class RacingLobby {
               this.broadcastToAll({
                 type: 'partyState',
                 players: this.players,
-                trackId: this.selectedMap
+                trackId: 'map1'
               });
             } else if (this.hostId) {
               // If guest, send update to host
@@ -413,7 +411,8 @@ class RacingLobby {
             conn.send({
               type: 'partyState',
               players: this.players,
-              trackId: this.selectedMap
+              // Use hardcoded map ID
+              trackId: 'map1'
             });
             
             // Notify other players about the new player
@@ -466,7 +465,7 @@ class RacingLobby {
               this.broadcastToAll({
                 type: 'partyState',
                 players: this.players,
-                trackId: this.selectedMap
+                trackId: 'map1'
               });
             }
           }
@@ -481,14 +480,9 @@ class RacingLobby {
             this.broadcastToAll({
               type: 'partyState',
               players: this.players,
-              trackId: this.selectedMap
+              trackId: 'map1'
             });
           }
-          break;
-
-        case 'mapUpdate':
-          // Update selected map
-          this.selectedMap = data.trackId;
           break;
       }
     }
@@ -550,7 +544,8 @@ class RacingLobby {
         this.broadcastToAll({
           type: 'partyState',
           players: this.players,
-          trackId: this.selectedMap
+          // Use hardcoded map ID
+          trackId: 'map1'
         });
       }
     }
@@ -576,7 +571,7 @@ class RacingLobby {
       
       const gameConfig = {
         type: 'startGame',
-        trackId: this.selectedMap,
+        trackId: 'map1',
         players: this.players,
         multiplayer: true
       };
@@ -584,7 +579,7 @@ class RacingLobby {
       // Broadcast to all connected players
       this.broadcastToAll({
         type: 'startGame',
-        trackId: this.selectedMap,
+        trackId: 'map1',
         players: this.players,
         multiplayer: true
       });
@@ -616,7 +611,7 @@ class RacingLobby {
       // Create a single player game config
       const gameConfig = {
         type: 'startGame',
-        trackId: this.selectedMap,
+        trackId: 'map1',
         players: [{
           id: this.playerId || 'solo-player',
           name: this.playerName,
@@ -831,142 +826,6 @@ class RacingLobby {
         console.log(`Player ${player.name} (${player.id}) timed out - removing from party`);
         this.removePlayer(player.id);
       });
-    }
-
-    initMapSelector() {
-      // Create the map selector container
-      const mapSelectorContainer = document.createElement('div');
-      mapSelectorContainer.className = 'map-selector-container';
-      mapSelectorContainer.style.marginBottom = '20px';
-      
-      // Add title
-      const title = document.createElement('h3');
-      title.textContent = 'SELECT MAP';
-      title.style.textAlign = 'center';
-      title.style.marginBottom = '15px';
-      title.style.color = '#ffffff';
-      mapSelectorContainer.appendChild(title);
-      
-      // Create map options container
-      const mapsContainer = document.createElement('div');
-      mapsContainer.className = 'maps-container';
-      mapsContainer.style.display = 'flex';
-      mapsContainer.style.flexDirection = 'column';
-      mapsContainer.style.gap = '10px';
-      
-      // Define available maps
-      const maps = [
-        { id: 'map1', name: 'Circuit 1' },
-        { id: 'map2', name: 'Circuit 2' }
-      ];
-      
-      // Create map options
-      maps.forEach(map => {
-        const mapOption = document.createElement('div');
-        mapOption.className = 'map-option';
-        mapOption.style.display = 'flex';
-        mapOption.style.alignItems = 'center';
-        mapOption.style.padding = '10px';
-        mapOption.style.backgroundColor = '#333';
-        mapOption.style.borderRadius = '8px';
-        mapOption.style.cursor = 'pointer';
-        mapOption.style.transition = 'all 0.2s ease';
-        
-        // Default border for non-selected maps
-        mapOption.style.border = '2px solid transparent';
-        
-        // Set map1 as the default selection
-        if (map.id === 'map1') {
-          mapOption.classList.add('selected');
-          mapOption.style.border = '2px solid #ff0080';
-          this.selectedMap = 'map1'; // Set default selected map
-        }
-        
-        // Create thumbnail container
-        const thumbnailContainer = document.createElement('div');
-        thumbnailContainer.style.width = '60px';
-        thumbnailContainer.style.height = '60px';
-        thumbnailContainer.style.marginRight = '10px';
-        thumbnailContainer.style.backgroundColor = '#222';
-        thumbnailContainer.style.borderRadius = '5px';
-        thumbnailContainer.style.overflow = 'hidden';
-        
-        // Create map thumbnail (placeholder)
-        const thumbnail = document.createElement('div');
-        thumbnail.style.width = '100%';
-        thumbnail.style.height = '100%';
-        thumbnail.style.background = map.id === 'map1' ? 
-          'linear-gradient(45deg, #007acc, #00aaff)' : 
-          'linear-gradient(45deg, #cc7a00, #ffaa00)';
-        thumbnailContainer.appendChild(thumbnail);
-        
-        // Create map info
-        const mapInfo = document.createElement('div');
-        mapInfo.style.flex = '1';
-        
-        // Map name
-        const mapName = document.createElement('div');
-        mapName.textContent = map.name;
-        mapName.style.fontWeight = 'bold';
-        mapInfo.appendChild(mapName);
-        
-        // Append to option
-        mapOption.appendChild(thumbnailContainer);
-        mapOption.appendChild(mapInfo);
-        
-        // Add click handler
-        mapOption.addEventListener('click', () => {
-          // Remove selected class from all options
-          document.querySelectorAll('.map-option').forEach(opt => {
-            opt.classList.remove('selected');
-            opt.style.border = '2px solid transparent';
-          });
-          
-          // Add selected class to clicked option
-          mapOption.classList.add('selected');
-          mapOption.style.border = '2px solid #ff0080';
-          
-          // Store selected map
-          this.selectedMap = map.id;
-          
-          // If host, broadcast to all players
-          if (this.isHost) {
-            this.broadcastToAll({
-              type: 'mapUpdate',
-              trackId: map.id
-            });
-          }
-        });
-        
-        // Add hover effect
-        mapOption.addEventListener('mouseover', () => {
-          if (!mapOption.classList.contains('selected')) {
-            mapOption.style.backgroundColor = '#444';
-          }
-        });
-        
-        mapOption.addEventListener('mouseout', () => {
-          if (!mapOption.classList.contains('selected')) {
-            mapOption.style.backgroundColor = '#333';
-          }
-        });
-        
-        mapsContainer.appendChild(mapOption);
-      });
-      
-      mapSelectorContainer.appendChild(mapsContainer);
-      
-      // Add the map selector to the left panel
-      const leftPanel = document.querySelector('.left-panel');
-      if (leftPanel) {
-        // Insert after the title, before any other content
-        const panelTitle = leftPanel.querySelector('.panel-title');
-        if (panelTitle) {
-          leftPanel.insertBefore(mapSelectorContainer, panelTitle.nextSibling);
-        } else {
-          leftPanel.appendChild(mapSelectorContainer);
-        }
-      }
     }
   }
   
