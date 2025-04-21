@@ -378,7 +378,7 @@ function createTextSprite(text) {
   context.clearRect(0, 0, canvas.width, canvas.height);
   
   // Text style
-  context.font = 'bold 32px Arial';
+  context.font = 'bold 32px Poppins';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   
@@ -440,12 +440,6 @@ export function updateOpponentCarPosition(playerId, data) {
   
   // Store race progress data with detailed logging
   if (data.raceProgress) {
-    // Log the received race progress data for debugging
-    console.log(`RACE PROGRESS DATA RECEIVED for ${data.playerName || playerId}:`, {
-      gateIndex: data.raceProgress.currentGateIndex,
-      distance: data.raceProgress.distanceToNextGate
-    });
-    
     // Create a fresh race progress object with explicit property assignments
     if (!opponent.raceProgress) {
       opponent.raceProgress = {};
@@ -459,6 +453,24 @@ export function updateOpponentCarPosition(playerId, data) {
     }
     if (data.playerColor) {
       opponent.color = data.playerColor;
+    }
+  }
+  
+  // Check if this player has just finished the race
+  if (data.finishTime && window.playerFinishTimes) {
+    console.log(`Received finish time for ${data.playerName || playerId}: ${data.finishTime}`);
+    
+    // Store the finish time in our permanent tracker
+    window.playerFinishTimes[playerId] = data.finishTime;
+    
+    // Also update this opponent as having finished the race
+    opponent.raceFinished = true;
+    
+    // Mark the last gate as passed for this opponent
+    if (opponent.raceProgress) {
+      if (window.gateData && window.gateData.totalGates) {
+        opponent.raceProgress.currentGateIndex = window.gateData.totalGates;
+      }
     }
     
     // Force the leaderboard to update
@@ -567,6 +579,16 @@ export function sendCarData(gameState) {
       distanceToNextGate: distanceToNextGate
     }
   };
+  
+  // Include finish time if the player has finished the race
+  if (window.raceState.raceFinished && window.playerFinishTimes) {
+    // Get the finish time from our permanent store
+    const myFinishTime = window.playerFinishTimes[myPlayerId];
+    if (myFinishTime) {
+      carData.finishTime = myFinishTime;
+      console.log("Sending finish time in car data:", myFinishTime);
+    }
+  }
   
   // Handle differently based on if we're host or client
   if (state.isHost) {

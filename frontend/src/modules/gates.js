@@ -237,6 +237,9 @@ export function showFinishMessage(totalGates, resetCallback) {
     if (myPlayerIndex !== -1) {
       window.playerPositions[myPlayerIndex].finishTime = finalTime;
     }
+    console.log("Finish time stored in player positions:", window.playerPositions);
+  } else {
+    window.playerFinishTimes[localStorage.getItem('myPlayerId')] = finalTime;
   }
   
   // Create the FINISH text container

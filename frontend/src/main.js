@@ -130,6 +130,10 @@ let minimapState;
 let finishedPlayers = new Set();
 let finalLeaderboardShown = false;
 
+// Add this to the global variables section
+let playerFinishTimes = {};
+window.playerFinishTimes = playerFinishTimes;
+
 // Add these functions before init():
 
 // Create the waiting and countdown UI elements
@@ -268,12 +272,19 @@ function createLeaderboard() {
   document.body.appendChild(leaderboard);
 }
 
-// Update the leaderboard function to remove gate display
+// Update the updateLeaderboard function to preserve finish times
 function updateLeaderboard() {
   if (!leaderboard) return;
   
   const leaderboardPositions = document.getElementById('leaderboard-positions');
   if (!leaderboardPositions) return;
+  
+  // Before clearing the array, save any finish times to our permanent store
+  playerPositions.forEach(player => {
+    if (player.finishTime) {
+      playerFinishTimes[player.id] = player.finishTime;
+    }
+  });
   
   // Clear the player positions array
   playerPositions = [];
@@ -346,6 +357,13 @@ function updateLeaderboard() {
       return distA - distB;
     });
   }
+  
+  // Restore saved finish times from our permanent store
+  playerPositions.forEach(player => {
+    if (playerFinishTimes[player.id]) {
+      player.finishTime = playerFinishTimes[player.id];
+    }
+  });
   
   // Generate HTML for leaderboard - REMOVED GATE INFORMATION
   let leaderboardHTML = '';
@@ -716,10 +734,29 @@ function showFinalLeaderboard() {
   title.style.textShadow = '0 0 15px rgba(255, 255, 255, 0.5)';
   title.style.letterSpacing = '3px';
   
-  // Sort players by finish position (if present), then by gates passed
-  const sortedPlayers = [...playerPositions].sort((a, b) => {
-    return (b.gateIndex - a.gateIndex) || (a.distanceToNextGate - b.distanceToNextGate);
+  // Helper function to convert MM:SS time string to seconds
+  function timeToSeconds(timeString) {
+    const [minutes, seconds] = timeString.split(':').map(Number);
+    return minutes * 60 + seconds;
+  }
+  
+  // Find finished players (who have finish times)
+  const finishedPlayers = playerPositions.filter(player => {
+    const finishTime = playerFinishTimes[player.id] || player.finishTime;
+    return finishTime && finishTime !== "00:00" && finishTime !== "DNF";
   });
+  
+  // Sort players by their finish time (lowest first)
+  const sortedPlayers = finishedPlayers.sort((a, b) => {
+    const timeA = playerFinishTimes[a.id] || a.finishTime || "99:99";
+    const timeB = playerFinishTimes[b.id] || b.finishTime || "99:99";
+    
+    // Convert time strings to seconds for comparison
+    return timeToSeconds(timeA) - timeToSeconds(timeB);
+  });
+  
+  // Take only top 3 players
+  const topPlayers = sortedPlayers.slice(0, 3);
   
   // Create leaderboard table
   const table = document.createElement('table');
@@ -736,17 +773,17 @@ function showFinalLeaderboard() {
   `;
   table.appendChild(headerRow);
   
-  // Add player rows
-  sortedPlayers.forEach((player, index) => {
+  // Add player rows for top 3 only
+  topPlayers.forEach((player, index) => {
     const row = document.createElement('tr');
     
     // Determine position indicator and style
-    const positionLabel = getPositionLabel(index + 1);
-    const positionColor = getPositionColor(index + 1);
+    const position = index + 1;
+    const positionLabel = getPositionLabel(position);
+    const positionColor = getPositionColor(position);
     
-    // Determine if player finished (reached last gate)
-    const hasFinished = player.gateIndex >= gateData.totalGates - 1;
-    const timeDisplay = hasFinished ? player.finishTime || "00:00" : "DNF";
+    // Get finish time
+    const finishTime = playerFinishTimes[player.id] || player.finishTime || "00:00";
     
     row.innerHTML = `
       <td style="padding: 12px; text-align: center; color: ${positionColor}; font-weight: bold;">${positionLabel}</td>
@@ -756,11 +793,22 @@ function showFinalLeaderboard() {
           ${player.name}
         </div>
       </td>
-      <td style="padding: 12px; text-align: right; font-weight: ${hasFinished ? 'bold' : 'normal'}; color: ${hasFinished ? '#ffffff' : '#aaaaaa'};">${timeDisplay}</td>
+      <td style="padding: 12px; text-align: right; font-weight: bold; color: #ffffff;">${finishTime}</td>
     `;
     
     table.appendChild(row);
   });
+  
+  // Show a message if no players finished yet
+  if (topPlayers.length === 0) {
+    const noResultsRow = document.createElement('tr');
+    noResultsRow.innerHTML = `
+      <td colspan="3" style="padding: 30px; text-align: center; color: #aaaaaa;">
+        No players have finished the race yet.
+      </td>
+    `;
+    table.appendChild(noResultsRow);
+  }
   
   // Create home button
   const homeButton = document.createElement('button');
