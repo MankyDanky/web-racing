@@ -58,7 +58,7 @@ body {
 /* Left Panel (Host Race) absolute positioning */
 .left-panel {
   position: fixed;
-  text-align: center;
+  text-align: left;
   top: 20px;
   left: 20px;
   width: 22%;
@@ -66,6 +66,7 @@ body {
   max-height: 450px; /* Slightly reduced height */
   border-radius: 10px;
   z-index: 10;
+  overflow:visible;
 }
 
 /* Right Panel (Racers) absolute positioning */
@@ -101,7 +102,7 @@ body {
   height: auto;
   display: flex;
   flex-direction: column;
-  overflow-y: auto; /* Allow scrolling if content overflows */
+  overflow-y: visible; /* Allow scrolling if content overflows */
 }
 /* Panel title updates to match game title */
 .panel-title {
@@ -109,7 +110,6 @@ body {
   font-weight: 900;
   margin-bottom: 20px;
   color: #ffffff;
-  -webkit-text-stroke: 2px #000;
   text-align: center;
   font-size: 2rem;
 }
@@ -142,7 +142,6 @@ body {
   margin-bottom: 15px;
   font-size: 2rem;
   color: #ffffff;
-  -webkit-text-stroke: 2px #000;
   text-align: center;
 }
 
@@ -155,7 +154,7 @@ body {
 /* Game Buttons - Base styles for all buttons */
 .play-btn, game-btn, #host-start-btn {
   font-family:'Poppins', sans-serif;
-  font-weight: 900;
+  font-weight: 800;
   font-size: 1.2rem; /* Larger text size */
   width: 100%; /* Full width for all buttons */
   max-width: 250px; /* Maximum width */
@@ -168,14 +167,13 @@ body {
   text-transform: uppercase;
   position: relative;
   color: #ffffff; /* White text */
-  -webkit-text-stroke: 1.5px #b30059; /* Black text outline */
   text-align: center;
   margin-bottom: 15px;
   box-shadow: 0 6px 0 #b30059;
 }
 
 .stop-btn {
-  margin: auto;
+  margin-top: 20px;
 }
 
 /* Button hover effect */
@@ -186,11 +184,6 @@ body {
   box-shadow: 0 4px 0 #b30059;
 }
 
-.create-btn {
-  position: fixed;
-  left: 20px;
-  top: 50px;
-}
 
 /* Button active effect */
 .game-btn:active, .create-btn:active, .join-btn:active,
@@ -203,12 +196,11 @@ body {
   background-color: #ff0080;
   border: 2px solid #b30059;
   color: white;
-  -webkit-text-stroke: 1px #b30059;
   border-radius: 3px;
   padding: 8px 12px;
   cursor: pointer;
   font-family: 'Poppins', sans-serif;
-  font-weight: 900;
+  font-weight: 700;
   font-size: 1rem;
   box-shadow: 0 3px 0 #b30059;
 }
@@ -233,10 +225,7 @@ body {
 .code-display {
   background: transparent;
   border-radius: 10px;
-  padding: 20px;
   text-align: center;
-  margin-bottom: 20px;
-  /* Removed box-shadow and other inconsistent styles */
 }
 
 /* Other heading updates to match game title */
@@ -251,7 +240,6 @@ body {
   margin-bottom: 15px;
   font-size: 28px;
   color: #ffffff;
-  -webkit-text-stroke: 2px #000;
   text-align: center;
 }
 
@@ -328,7 +316,6 @@ input::placeholder {
   font-weight: 900;
   margin-bottom: 15px;
   color: #ffffff;
-  -webkit-text-stroke: 1.5px #000;
   text-align: center;
 }
 
@@ -519,75 +506,88 @@ input::placeholder {
   background-position: center;
 }
 
-/* Map Selector Styles */
+/* Map Dropdown Styles */
 .map-selector-container {
+  margin-top: 20px;
   margin-bottom: 20px;
-  position: absolute;
-  top: 100px;
-  left: 0px;
 }
 
-.map-selector-container .selector-title {
+.map-selector-container{
   text-align: center;
   margin-bottom: 15px;
   color: #ffffff;
-  -webkit-text-stroke: 2px #000;
   font-family: 'Poppins', sans-serif;
-  font-size: 28px;
-  font-weight: 900;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
-.maps-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.map-dropdown {
+  position: relative;
+  width: 100%;
 }
 
-.map-option {
+.dropdown-button {
   display: flex;
   align-items: center;
-  padding: 10px;
-  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 12px;
   background-color: #ff0080;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 2px solid transparent;
-}
-
-.map-option:hover {
-  transform: scale(1.05);
-}
-
-.map-option.selected {
   border: 2px solid #b30059;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #ffffff;
+  -webkit-text-stroke: none;
+  text-align: left;
+  transition: all 0.2s ease; 
+  box-shadow: 0 3px 0 #b30059;
 }
 
-.map-thumbnail {
-  width: 60px;
-  height: 30px;
+.dropdown-button:hover {
+  background-color: #f5007c;
+}
+
+.dropdown-arrow {
+  font-size: 0.8rem;
   margin-right: 10px;
+  color: #ffffff;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
   background-color: #ff0080;
-  border-radius: 5px;
+  border: 3px solid #b30059;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  z-index: 100;
   overflow: hidden;
 }
 
-.map1-thumbnail {
-  background: linear-gradient(45deg, #007acc, #00aaff);
+.map-dropdown.open .dropdown-content {
+  display: block;
 }
 
-.map2-thumbnail {
-  background: linear-gradient(45deg, #cc7a00, #ffaa00);
-}
-
-.map-info {
-  flex: 1;
-}
-
-.map-name {
-  font-weight: 900;
+.dropdown-option {
+  padding: 10px 15px;
+  cursor: pointer;
   font-family: 'Poppins', sans-serif;
+  font-weight: 700;
   font-size: 1.2rem;
-  color: #fff;
-  -webkit-text-stroke: 1.5px #b30059;
+  color: #ffffff;
+  -webkit-text-stroke: none;
+  transition: background-color 0.2s ease;
+}
+
+.dropdown-option:hover {
+  background-color: #f5007c;
+}
+
+.dropdown-option.selected {
+  background-color: #d3006b;
 }

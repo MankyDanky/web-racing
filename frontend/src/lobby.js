@@ -491,14 +491,16 @@ class RacingLobby {
           this.selectedMap = data.trackId;
           
           // Update the UI to show the selected map
-          document.querySelectorAll('.map-option').forEach(opt => {
+          const dropdownOptions = document.querySelectorAll('.dropdown-option');
+          const selectedMapName = document.querySelector('.selected-map-name');
+          
+          dropdownOptions.forEach(opt => {
             const mapId = opt.getAttribute('data-map-id');
             if (mapId === data.trackId) {
               opt.classList.add('selected');
-              opt.style.border = '2px solid #ff0080';
+              selectedMapName.textContent = opt.textContent;
             } else {
               opt.classList.remove('selected');
-              opt.style.border = '2px solid transparent';
             }
           });
           break;
@@ -847,30 +849,48 @@ class RacingLobby {
     }
 
     initMapSelector() {
-      // Find all map options in the DOM
-      const mapOptions = document.querySelectorAll('.map-option');
+      const mapDropdown = document.querySelector('.map-dropdown');
+      const dropdownButton = document.querySelector('.dropdown-button');
+      const selectedMapName = document.querySelector('.selected-map-name');
+      const dropdownOptions = document.querySelectorAll('.dropdown-option');
       
-      // Loop through each option and add click handlers
-      mapOptions.forEach(mapOption => {
-        const mapId = mapOption.getAttribute('data-map-id');
-        
-        // Initialize the selectedMap from the HTML structure (selected class)
-        if (mapOption.classList.contains('selected')) {
-          this.selectedMap = mapId;
+      // Initialize selected map from the HTML structure
+      dropdownOptions.forEach(option => {
+        if (option.classList.contains('selected')) {
+          this.selectedMap = option.getAttribute('data-map-id');
+          selectedMapName.textContent = option.textContent;
         }
-        
-        // Add click handler
-        mapOption.addEventListener('click', () => {
-          // Remove selected class from all options
-          document.querySelectorAll('.map-option').forEach(opt => {
-            opt.classList.remove('selected');
-          });
+      });
+      
+      // Toggle dropdown open/close when button is clicked
+      dropdownButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        mapDropdown.classList.toggle('open');
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', () => {
+        mapDropdown.classList.remove('open');
+      });
+      
+      // Handle option selection
+      dropdownOptions.forEach(option => {
+        option.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const mapId = option.getAttribute('data-map-id');
           
-          // Add selected class to clicked option
-          mapOption.classList.add('selected');
+          // Update selected option
+          dropdownOptions.forEach(opt => opt.classList.remove('selected'));
+          option.classList.add('selected');
+          
+          // Update button text
+          selectedMapName.textContent = option.textContent;
           
           // Store selected map
           this.selectedMap = mapId;
+          
+          // Close dropdown
+          mapDropdown.classList.remove('open');
           
           // If host, broadcast to all players
           if (this.isHost) {
