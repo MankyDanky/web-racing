@@ -887,6 +887,48 @@ function getPlayerColorHex(colorName) {
 // Make this function available globally
 window.showFinalLeaderboard = showFinalLeaderboard;
 
+// Add this function to your code, before or after setupEnhancedLighting()
+function setupCartoonySkybox(scene) {
+  // Create shader materials for gradient skybox
+  const skyGeo = new THREE.SphereGeometry(1000, 32, 32); // Large sphere to contain the scene
+  
+  // Shader material for gradient
+  const uniforms = {
+    topColor: { value: new THREE.Color(0x88ccff) },  // Light blue at top
+    bottomColor: { value: new THREE.Color(0xbbe2ff) }, // White/light color at horizon
+    offset: { value: 0 },
+    exponent: { value: 0.6 }
+  };
+  
+  const skyMat = new THREE.ShaderMaterial({
+    uniforms: uniforms,
+    vertexShader: `
+      varying vec3 vWorldPosition;
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 bottomColor;
+      uniform float offset;
+      uniform float exponent;
+      varying vec3 vWorldPosition;
+      void main() {
+        float h = normalize(vWorldPosition + offset).y;
+        float t = max(pow(max(h, 0.0), exponent), 0.0);
+        gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
+      }
+    `,
+    side: THREE.BackSide // Render the inside of the sphere
+  });
+  
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(sky);
+}
+
 // Initialize everything
 function init() {
   console.log("Main module loaded");
@@ -905,7 +947,7 @@ function init() {
 
   // Setup scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x66ccff);
+  setupCartoonySkybox(scene); // Add this line instead of setting scene.background
   setupEnhancedLighting();
   
   // Setup camera
@@ -918,6 +960,7 @@ function init() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   document.body.appendChild(renderer.domElement);
   
   // Initialize UI
@@ -1255,6 +1298,7 @@ function setupEnhancedLighting() {
   // Primary directional light (sun)
   const directionalLight = new THREE.DirectionalLight(0xffffff, 3.5);
   directionalLight.position.set(40, 250, 30);
+  
   
   scene.add(directionalLight);
 }

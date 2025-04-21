@@ -17,14 +17,14 @@ class LobbyBackground {
   init() {
     // Create scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x66ccff);
+    setupCartoonySkybox(this.scene); 
     
     // Create camera
     this.camera = new THREE.PerspectiveCamera(
       60, 
       window.innerWidth / window.innerHeight, 
       0.1, 
-      1000
+      1500
     );
     this.camera.position.set(0, 10, 40);
     this.camera.lookAt(0, 0, 0);
@@ -78,17 +78,6 @@ class LobbyBackground {
     // Directional light (sun)
     const directionalLight = new THREE.DirectionalLight(0xffffff, 3.5);
     directionalLight.position.set(50, 100, 50);
-    directionalLight.castShadow = true;
-    
-    // Adjust shadow properties for better quality
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -100;
-    directionalLight.shadow.camera.right = 100;
-    directionalLight.shadow.camera.top = 100;
-    directionalLight.shadow.camera.bottom = -100;
     
     this.scene.add(directionalLight);
   }
@@ -101,8 +90,8 @@ class LobbyBackground {
       const track = gltf.scene;
       track.traverse((child) => {
         if (child.isMesh) {
-            child.receiveShadow = false;
-            child.castShadow = false;
+            child.receiveShadow = true;
+            child.castShadow = true;
         }
       });
       this.models.track = track;
@@ -115,8 +104,8 @@ class LobbyBackground {
       gates.traverse((child) => {
         if (child.isMesh) {
             
-            child.castShadow = false;
-            child.receiveShadow = false;
+            child.castShadow = true;
+            child.receiveShadow = true;
         }
       });
       this.models.gates = gates;
@@ -155,8 +144,8 @@ class LobbyBackground {
           }
           
           // Set shadow properties
-          child.castShadow = false;
-          child.receiveShadow = false;
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
       });
       
@@ -191,6 +180,50 @@ class LobbyBackground {
     // Render scene
     this.renderer.render(this.scene, this.camera);
   }
+}
+
+
+// Add this function to your code, before or after setupEnhancedLighting()
+function setupCartoonySkybox(scene) {
+  // Create shader materials for gradient skybox
+  const skyGeo = new THREE.SphereGeometry(1000, 32, 32); // Large sphere to contain the scene
+  
+  // Shader material for gradient
+  const uniforms = {
+    topColor: { value: new THREE.Color(0x88ccff) },  // Light blue at top
+    bottomColor: { value: new THREE.Color(0xbbe2ff) }, // White/light color at horizon
+    offset: { value: 0 },
+    exponent: { value: 0.6 }
+  };
+  
+  const skyMat = new THREE.ShaderMaterial({
+    uniforms: uniforms,
+    vertexShader: `
+      varying vec3 vWorldPosition;
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 bottomColor;
+      uniform float offset;
+      uniform float exponent;
+      varying vec3 vWorldPosition;
+      void main() {
+        float h = normalize(vWorldPosition + offset).y;
+        float t = max(pow(max(h, 0.0), exponent), 0.0);
+        gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
+      }
+    `,
+    side: THREE.BackSide // Render the inside of the sphere
+  });
+  
+  const sky = new THREE.Mesh(skyGeo, skyMat);
+  scene.add(sky);
+  
 }
 
 export default LobbyBackground;
