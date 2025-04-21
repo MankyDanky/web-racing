@@ -258,7 +258,7 @@ export function showFinishMessage(totalGates, resetCallback) {
   finishText.style.boxShadow = '0 0 20px hsla(0, 0.00%, 0.00%, 0.50)';
   finishText.style.borderRadius = '10px';
   finishText.textContent = 'FINISH';
-  finishText.style.fontFamily = "'Exo 2', sans-serif";
+  finishText.style.fontFamily = "'Poppins', sans-serif";
   finishText.style.fontWeight = '900';
   finishText.style.fontSize = '120px';
   finishText.style.color = '#ff0080';

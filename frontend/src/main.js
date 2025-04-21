@@ -150,7 +150,7 @@ function createRaceUI() {
   waitingForPlayersOverlay.style.color = '#fff'; // White text like speedometer
   waitingForPlayersOverlay.style.padding = '30px 40px';
   waitingForPlayersOverlay.style.borderRadius = '10px';
-  waitingForPlayersOverlay.style.fontFamily = "'Exo 2', sans-serif";
+  waitingForPlayersOverlay.style.fontFamily = "'Poppins', sans-serif";
   waitingForPlayersOverlay.style.fontSize = '24px';
   waitingForPlayersOverlay.style.textAlign = 'center';
   waitingForPlayersOverlay.style.zIndex = '1000';
@@ -176,7 +176,7 @@ function createRaceUI() {
   countdownOverlay.style.color = '#fff';
   countdownOverlay.style.padding = '40px 60px';
   countdownOverlay.style.borderRadius = '10px';
-  countdownOverlay.style.fontFamily = "'Exo 2', sans-serif";
+  countdownOverlay.style.fontFamily = "'Poppins', sans-serif";
   countdownOverlay.style.fontSize = '60px'; // Larger font for better visibility
   countdownOverlay.style.fontWeight = 'bold';
   countdownOverlay.style.textAlign = 'center';
@@ -214,7 +214,7 @@ function createRaceTimer() {
   raceTimer.style.color = '#fff';
   raceTimer.style.padding = '10px 20px';
   raceTimer.style.borderRadius = '10px';
-  raceTimer.style.fontFamily = "'Exo 2', sans-serif";
+  raceTimer.style.fontFamily = "'Poppins', sans-serif";
   raceTimer.style.fontSize = '28px';
   raceTimer.style.fontWeight = 'bold';
   raceTimer.style.textAlign = 'center';
@@ -246,7 +246,7 @@ function createLeaderboard() {
   leaderboard.style.color = '#fff';
   leaderboard.style.padding = '15px';
   leaderboard.style.borderRadius = '10px';
-  leaderboard.style.fontFamily = "'Exo 2', sans-serif";
+  leaderboard.style.fontFamily = "'Poppins', sans-serif";
   leaderboard.style.fontSize = '18px';
   leaderboard.style.fontWeight = 'bold';
   leaderboard.style.textAlign = 'left';
@@ -551,7 +551,7 @@ function createSpectatorUI() {
   spectatorUI.style.color = '#fff';
   spectatorUI.style.padding = '10px 20px';
   spectatorUI.style.borderRadius = '10px';
-  spectatorUI.style.fontFamily = "'Exo 2', sans-serif";
+  spectatorUI.style.fontFamily = "'Poppins', sans-serif";
   spectatorUI.style.fontSize = '18px';
   spectatorUI.style.fontWeight = 'bold';
   spectatorUI.style.textAlign = 'center';
@@ -714,7 +714,7 @@ function showFinalLeaderboard() {
   finalLeaderboard.style.color = '#fff';
   finalLeaderboard.style.padding = '40px';
   finalLeaderboard.style.borderRadius = '15px';
-  finalLeaderboard.style.fontFamily = "'Exo 2', sans-serif";
+  finalLeaderboard.style.fontFamily = "'Poppins', sans-serif";
   finalLeaderboard.style.fontSize = '20px';
   finalLeaderboard.style.textAlign = 'center';
   finalLeaderboard.style.zIndex = '2000';
@@ -768,8 +768,8 @@ function showFinalLeaderboard() {
   const headerRow = document.createElement('tr');
   headerRow.innerHTML = `
     <th style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.3);">POSITION</th>
-    <th style="padding: 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.3);">PLAYER</th>
-    <th style="padding: 10px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.3);">TIME</th>
+    <th style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.3);">PLAYER</th>
+    <th style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.3);">TIME</th>
   `;
   table.appendChild(headerRow);
   
@@ -1273,10 +1273,10 @@ function initUI() {
 // Function to update the speedometer with perfect alignment
 function updateSpeedometer(speed) {
   // Smooth the speed change
-  currentSpeed = speed -1;
+  currentSpeed = Math.max(speed - 1, 0);
   
   // Get speed as percentage of max speed
-  const speedPercent = Math.min(currentSpeed / MAX_SPEED_KPH, 1);
+  const speedPercent = Math.min(currentSpeed / 2 / MAX_SPEED_KPH, 1);
   
   // Calculate rotation - 180 degrees is full scale
   const fillRotation = speedPercent * 180;
