@@ -5,11 +5,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const VEHICLE_WIDTH = 2.0;
 const VEHICLE_HEIGHT = 0.6;
 const VEHICLE_LENGTH = 4.0;
-const WHEEL_RADIUS = 0.7;
+const WHEEL_RADIUS = 0.4;
 const WHEEL_WIDTH = 0.25;
 const SUSPENSION_REST_LENGTH = 0.3;
 const WHEEL_X_OFFSET = 0.8;
-const WHEEL_Z_OFFSET = 1.6;
+const WHEEL_Z_OFFSET = 1.5;
 
 // Physics tuning parameters
 const SUSPENSION_STIFFNESS = 50;
@@ -20,8 +20,8 @@ const WHEEL_FRICTION = 10;
 
 // Steering parameters
 const MAX_STEERING_ANGLE = 0.25;
-const STEERING_SPEED = 1;
-const STEERING_RETURN_SPEED = 1; 
+const STEERING_SPEED = 2;
+const STEERING_RETURN_SPEED = 2; 
 
 // Modify createVehicle to accept a callback for when the car is fully loaded
 export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoaded) {
@@ -47,7 +47,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   chassisTransform.setOrigin(new ammo.btVector3(0, 5.2, 0));
   
   const chassisMotionState = new ammo.btDefaultMotionState(chassisTransform);
-  const chassisMass = 800;
+  const chassisMass = 200;
   const localInertia = new ammo.btVector3(0, 0, 0);
   chassisShape.calculateLocalInertia(chassisMass, localInertia);
   
@@ -57,7 +57,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   
   carComponents.carBody = new ammo.btRigidBody(chassisRbInfo);
   carComponents.carBody.setActivationState(4); 
-  carComponents.carBody.setFriction(0);
+  carComponents.carBody.setFriction(0.1);
   physicsWorld.addRigidBody(carComponents.carBody);
   
   // Create vehicle raycaster

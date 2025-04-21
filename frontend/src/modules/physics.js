@@ -50,7 +50,7 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
   
   // Calculate dot product using Three.js
   const dotForward = carForward.dot(velocityThree);
-  const maxEngineForce = 4000;
+  const maxEngineForce = 1000;
   const maxBrakingForce = 50;
   
   // Check if the race has started before allowing engine forces
