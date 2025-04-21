@@ -11,11 +11,13 @@ class RacingLobby {
       this.lastHeartbeat = {}; // Track when we last received a heartbeat from each player
       this.heartbeatInterval = null; // Store the interval for sending heartbeats
       this.connectionCheckInterval = null; // Store the interval for checking connections
+      this.selectedMap = 'map1'; // Default map selection
       
       // Initialize UI elements
       this.initUIElements();
       this.attachEventListeners();
       this.initCarColorCarousel();
+      this.initMapSelector(); // Add this line to initialize the map selector
       
       // Initialize PeerJS
       this.initPeerJS();
@@ -123,7 +125,7 @@ class RacingLobby {
               this.broadcastToAll({
                 type: 'partyState',
                 players: this.players,
-                trackId: 'map1'
+                trackId: this.selectedMap
               });
             } else if (this.hostId) {
               // If guest, send update to host
@@ -411,8 +413,7 @@ class RacingLobby {
             conn.send({
               type: 'partyState',
               players: this.players,
-              // Use hardcoded map ID
-              trackId: 'map1'
+              trackId: this.selectedMap // Use the selected map
             });
             
             // Notify other players about the new player
@@ -465,7 +466,7 @@ class RacingLobby {
               this.broadcastToAll({
                 type: 'partyState',
                 players: this.players,
-                trackId: 'map1'
+                trackId: this.selectedMap
               });
             }
           }
@@ -480,9 +481,26 @@ class RacingLobby {
             this.broadcastToAll({
               type: 'partyState',
               players: this.players,
-              trackId: 'map1'
+              trackId: this.selectedMap
             });
           }
+          break;
+
+        case 'mapUpdate':
+          // Update our selected map
+          this.selectedMap = data.trackId;
+          
+          // Update the UI to show the selected map
+          document.querySelectorAll('.map-option').forEach(opt => {
+            const mapId = opt.getAttribute('data-map-id');
+            if (mapId === data.trackId) {
+              opt.classList.add('selected');
+              opt.style.border = '2px solid #ff0080';
+            } else {
+              opt.classList.remove('selected');
+              opt.style.border = '2px solid transparent';
+            }
+          });
           break;
       }
     }
@@ -544,8 +562,7 @@ class RacingLobby {
         this.broadcastToAll({
           type: 'partyState',
           players: this.players,
-          // Use hardcoded map ID
-          trackId: 'map1'
+          trackId: this.selectedMap
         });
       }
     }
@@ -571,7 +588,7 @@ class RacingLobby {
       
       const gameConfig = {
         type: 'startGame',
-        trackId: 'map1',
+        trackId: this.selectedMap, // Use selected map instead of hardcoding map1
         players: this.players,
         multiplayer: true
       };
@@ -579,7 +596,7 @@ class RacingLobby {
       // Broadcast to all connected players
       this.broadcastToAll({
         type: 'startGame',
-        trackId: 'map1',
+        trackId: this.selectedMap, // Use selected map
         players: this.players,
         multiplayer: true
       });
@@ -611,11 +628,12 @@ class RacingLobby {
       // Create a single player game config
       const gameConfig = {
         type: 'startGame',
-        trackId: 'map1',
+        trackId: this.selectedMap, // Use selected map instead of hardcoding map1
         players: [{
           id: this.playerId || 'solo-player',
           name: this.playerName,
-          isHost: true
+          isHost: true,
+          playerColor: sessionStorage.getItem('carColor') || 'red' // Add player color
         }],
         isSinglePlayer: true
       };
@@ -825,6 +843,43 @@ class RacingLobby {
       disconnectedPlayers.forEach(player => {
         console.log(`Player ${player.name} (${player.id}) timed out - removing from party`);
         this.removePlayer(player.id);
+      });
+    }
+
+    initMapSelector() {
+      // Find all map options in the DOM
+      const mapOptions = document.querySelectorAll('.map-option');
+      
+      // Loop through each option and add click handlers
+      mapOptions.forEach(mapOption => {
+        const mapId = mapOption.getAttribute('data-map-id');
+        
+        // Initialize the selectedMap from the HTML structure (selected class)
+        if (mapOption.classList.contains('selected')) {
+          this.selectedMap = mapId;
+        }
+        
+        // Add click handler
+        mapOption.addEventListener('click', () => {
+          // Remove selected class from all options
+          document.querySelectorAll('.map-option').forEach(opt => {
+            opt.classList.remove('selected');
+          });
+          
+          // Add selected class to clicked option
+          mapOption.classList.add('selected');
+          
+          // Store selected map
+          this.selectedMap = mapId;
+          
+          // If host, broadcast to all players
+          if (this.isHost) {
+            this.broadcastToAll({
+              type: 'mapUpdate',
+              trackId: mapId
+            });
+          }
+        });
       });
     }
   }

@@ -986,22 +986,23 @@ function init() {
     tmpTrans = physicsState.tmpTrans;
     
     // Load the track as a single model
-    loadTrackModel(ammo, "map1", scene, physicsWorld, (trackModel) => {
-      console.log("Track model loaded, extracting for minimap");
+    const mapToLoad = gameConfig?.trackId || 'map1'; // Default to map1 if no config
+    loadTrackModel(ammo, mapToLoad, scene, physicsWorld, (trackModel) => {
+      console.log(`Track model loaded (${mapToLoad}), extracting for minimap`);
       // Extract track data for minimap when track is loaded
       extractTrackData(trackModel);
     });
     
     // Load map decorations
-    loadMapDecorations("map1", scene, renderer, camera);
+    loadMapDecorations(mapToLoad, scene, renderer, camera);
     
-    // Load gates - add this line
-    gateData = loadGates("map1", scene, (loadedGateData) => {
+    // Load gates
+    gateData = loadGates(mapToLoad, scene, (loadedGateData) => {
       // Store the reference when gates are fully loaded
       gateData = loadedGateData;
       // Make gate data globally available for multiplayer
       window.gateData = gateData;
-      console.log(`Gates loaded. Total gates: ${gateData.totalGates}`);
+      console.log(`Gates loaded for ${mapToLoad}. Total gates: ${gateData.totalGates}`);
     });
     
     console.log("About to create vehicle physics");
