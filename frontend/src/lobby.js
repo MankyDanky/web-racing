@@ -8,11 +8,14 @@ class RacingLobby {
       this.playerId = null;
       this.playerName = `Player_${Math.floor(Math.random() * 10000)}`;
       this.players = [];
+      this.lastHeartbeat = {}; // Track when we last received a heartbeat from each player
+      this.heartbeatInterval = null; // Store the interval for sending heartbeats
+      this.connectionCheckInterval = null; // Store the interval for checking connections
       
       // Initialize UI elements
       this.initUIElements();
       this.attachEventListeners();
-      this.initCarColorCarousel(); // Add this line
+      this.initCarColorCarousel();
       
       // Initialize PeerJS
       this.initPeerJS();
@@ -230,6 +233,9 @@ class RacingLobby {
         
         this.updatePlayerList();
         
+        // Start heartbeat monitoring
+        this.startHeartbeatMonitoring();
+        
         // Enable the play button
         this.playBtn.classList.remove('disabled');
       })
@@ -288,6 +294,9 @@ class RacingLobby {
               this.handleMessage(conn, data);
             });
             
+            // Start heartbeat monitoring
+            this.startHeartbeatMonitoring();
+            
             this.joinStatus.textContent = 'Connected to party!';
           });
           
@@ -303,6 +312,12 @@ class RacingLobby {
     }
     
     leaveParty() {
+      // Clear heartbeat intervals
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+      
       if (!this.hostId) return;
       
       // Find the host connection
@@ -347,6 +362,9 @@ class RacingLobby {
         connection: conn
       });
       
+      // Initialize heartbeat for this connection
+      this.lastHeartbeat[conn.peer] = Date.now();
+      
       // Handle incoming messages
       conn.on('data', (data) => {
         this.handleMessage(conn, data);
@@ -359,9 +377,20 @@ class RacingLobby {
     }
     
     handleMessage(conn, data) {
-      console.log('Received message:', data);
+      console.log('Received message:', data.type);
+      
+      // Update last heartbeat time for this connection
+      if (data.playerId) {
+        this.lastHeartbeat[data.playerId] = Date.now();
+      } else if (conn.peer) {
+        this.lastHeartbeat[conn.peer] = Date.now();
+      }
       
       switch(data.type) {
+        case 'heartbeat':
+          // Just update the timestamp, no further processing needed
+          break;
+          
         case 'joinRequest':
           if (this.isHost) {
             // Add new player to the party
@@ -371,6 +400,9 @@ class RacingLobby {
               isHost: false,
               playerColor: data.playerColor || 'red' // Save the player's color
             };
+            
+            // Initialize heartbeat timestamp for this player
+            this.lastHeartbeat[data.playerId] = Date.now();
             
             this.players.push(newPlayer);
             this.updatePlayerList();
@@ -596,6 +628,17 @@ class RacingLobby {
     }
     
     stopHosting() {
+      // Clear heartbeat intervals
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+      
+      if (this.connectionCheckInterval) {
+        clearInterval(this.connectionCheckInterval);
+        this.connectionCheckInterval = null;
+      }
+      
       // Notify all connected players that the party is ending
       this.broadcastToAll({
         type: 'partyEnded',
@@ -728,6 +771,61 @@ class RacingLobby {
       } else {
         console.error('No host connection found');
       }
+    }
+
+    startHeartbeatMonitoring() {
+      // Only the host needs to check connections
+      if (this.isHost) {
+        // Host checks if players are still connected every 5 seconds
+        this.connectionCheckInterval = setInterval(() => {
+          this.checkPlayerConnections();
+        }, 5000);
+      }
+      
+      // Everyone sends heartbeats every 3 seconds
+      this.heartbeatInterval = setInterval(() => {
+        this.sendHeartbeat();
+      }, 3000);
+    }
+
+    sendHeartbeat() {
+      if (this.isHost) {
+        // Host broadcasts heartbeat to all clients
+        this.broadcastToAll({
+          type: 'heartbeat',
+          timestamp: Date.now()
+        });
+      } else if (this.hostId) {
+        // Clients only need to send heartbeat to host
+        this.sendToHost({
+          type: 'heartbeat',
+          playerId: this.playerId,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    checkPlayerConnections() {
+      if (!this.isHost) return;
+      
+      const now = Date.now();
+      const timeoutThreshold = 5000;
+      
+      // Get list of disconnected players
+      const disconnectedPlayers = this.players.filter(player => {
+        // Skip ourselves (the host)
+        if (player.id === this.playerId) return false;
+        
+        // Check if this player has sent a heartbeat recently
+        const lastBeat = this.lastHeartbeat[player.id] || 0;
+        return (now - lastBeat) > timeoutThreshold;
+      });
+      
+      // Remove any disconnected players
+      disconnectedPlayers.forEach(player => {
+        console.log(`Player ${player.name} (${player.id}) timed out - removing from party`);
+        this.removePlayer(player.id);
+      });
     }
   }
   

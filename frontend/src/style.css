@@ -165,3 +165,35 @@ html, body {
   font-style: italic;
   font-size: 0.9em;
 }
+
+/* Exit button to return to lobby */
+.exit-game-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #ff0080;
+  border: 2px solid #b30059;
+  box-shadow: 0 3px 0 #b30059;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.2s ease;
+  color: white; /* Add text color for the icon */
+  font-size: 20px; /* Set icon size */
+  text-decoration: none; /* Remove underline from the link */
+}
+
+.exit-game-btn:hover {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b30059;
+}
+
+.exit-game-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #b30059;
+}
