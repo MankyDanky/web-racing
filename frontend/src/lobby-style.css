@@ -103,6 +103,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow-y: visible; /* Allow scrolling if content overflows */
+  
 }
 /* Panel title updates to match game title */
 .panel-title {
@@ -423,8 +424,10 @@ input::placeholder {
 .status-message {
   color: #ff0080;
   font-size: 0.9rem;
-  height: 20px;
-  margin-top: 5px;
+  position: fixed;
+  top: 30px;
+  right: 20px;
+  left: calc(100vw - 480px)
 }
 
 /* Car Color Carousel */
