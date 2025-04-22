@@ -31,6 +31,12 @@ class RacingLobby {
       this.copyCodeBtn = document.getElementById('copy-code-btn');
       this.hostStopBtn = document.getElementById('host-stop-btn');
       
+      // Add this line to reference the map selector container
+      this.mapSelectorContainer = document.querySelector('.map-selector-container');
+      
+      // Initially disable the map selector for everyone
+      this.mapSelectorContainer.classList.add('disabled');
+      
       // Center elements
       this.playerNameInput = document.getElementById('player-name-input');
       this.playBtn = document.getElementById('play-btn');
@@ -168,6 +174,11 @@ class RacingLobby {
           this.startSinglePlayerGame();
         }
       });
+
+      // Enable map selection for single player games
+      if (!this.isHost && !this.hostId) {
+        this.mapSelectorContainer.classList.remove('disabled');
+      }
     }
     
     createParty() {
@@ -226,6 +237,9 @@ class RacingLobby {
         this.racersTitle.classList.remove('hidden');
         this.playersContainer.classList.remove('hidden');
         
+        // Enable the map selector for host
+        this.mapSelectorContainer.classList.remove('disabled');
+        
         // Add host to player list
         this.players = [{
           id: this.playerId,
@@ -276,6 +290,9 @@ class RacingLobby {
             
             // Hide the join party controls
             this.joinSection.classList.add('hidden');
+            
+            // Ensure map selector remains disabled for non-hosts
+            this.mapSelectorContainer.classList.add('disabled');
             
             // Send player info to host with color
             conn.send({
@@ -503,6 +520,11 @@ class RacingLobby {
               opt.classList.remove('selected');
             }
           });
+          
+          // Dispatch an event to update the background
+          document.dispatchEvent(new CustomEvent('mapChanged', {
+            detail: { mapId: data.trackId }
+          }));
           break;
       }
     }
@@ -688,6 +710,9 @@ class RacingLobby {
       // Hide racers title and player list when no longer hosting
       this.racersTitle.classList.add('hidden');
       this.playersContainer.classList.add('hidden');
+      
+      // Disable map selector when no longer host
+      this.mapSelectorContainer.classList.add('disabled');
       
       // Update player list to show no players
       this.updatePlayerList();
@@ -891,6 +916,11 @@ class RacingLobby {
           
           // Close dropdown
           mapDropdown.classList.remove('open');
+          
+          // Dispatch an event to update the background
+          document.dispatchEvent(new CustomEvent('mapChanged', {
+            detail: { mapId: mapId }
+          }));
           
           // If host, broadcast to all players
           if (this.isHost) {

@@ -595,3 +595,9 @@ input::placeholder {
 .dropdown-option.selected {
   background-color: #d3006b;
 }
+
+/* Add these styles to your existing map dropdown CSS */
+
+.map-selector-container.disabled {
+  display: none;
+}

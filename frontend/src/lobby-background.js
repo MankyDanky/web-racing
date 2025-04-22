@@ -3,13 +3,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 class LobbyBackground {
-  constructor() {
+  constructor(initialMap = 'map1') {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
     this.controls = null;
     this.models = {};
     this.clock = new THREE.Clock();
+    this.currentMap = initialMap;
     
     this.init();
   }
@@ -29,14 +30,14 @@ class LobbyBackground {
     this.camera.position.set(0, 10, 40);
     this.camera.lookAt(0, 0, 0);
     
-    // Create renderer - change these settings
+    // Create renderer
     this.renderer = new THREE.WebGLRenderer({ 
       antialias: true,
-      alpha: false // Change to false to ensure proper background
+      alpha: false
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.physicallyCorrectLights = true; // Add this
-    this.renderer.outputEncoding = THREE.sRGBEncoding; // Add this for better color
+    this.renderer.physicallyCorrectLights = true;
+    this.renderer.outputEncoding = THREE.sRGBEncoding;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
@@ -61,7 +62,7 @@ class LobbyBackground {
     this.controls.autoRotateSpeed = 0.5;
     
     this.setupLights();
-    this.loadModels();
+    this.loadModels(this.currentMap);
 
     // Handle window resize
     window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -82,11 +83,16 @@ class LobbyBackground {
     this.scene.add(directionalLight);
   }
   
-  loadModels() {
+  // Method to load models based on map ID
+  loadModels(mapId) {
+    console.log(`Loading background models for ${mapId}`);
     const loader = new GLTFLoader();
     
+    // Clear existing models first
+    this.clearModels();
+    
     // Load track
-    loader.load('/models/maps/map1/track.glb', (gltf) => {
+    loader.load(`/models/maps/${mapId}/track.glb`, (gltf) => {
       const track = gltf.scene;
       track.traverse((child) => {
         if (child.isMesh) {
@@ -99,11 +105,10 @@ class LobbyBackground {
     });
     
     // Load gates
-    loader.load('/models/maps/map1/gates.glb', (gltf) => {
+    loader.load(`/models/maps/${mapId}/gates.glb`, (gltf) => {
       const gates = gltf.scene;
       gates.traverse((child) => {
         if (child.isMesh) {
-            
             child.castShadow = true;
             child.receiveShadow = true;
         }
@@ -112,17 +117,12 @@ class LobbyBackground {
       this.scene.add(gates);
     });
     
-    // Replace your decorations loading code with this precise version:
-    loader.load('/models/maps/map1/decorations.glb', (gltf) => {
+    // Load decorations
+    loader.load(`/models/maps/${mapId}/decorations.glb`, (gltf) => {
       const decorations = gltf.scene;
-      
-      // Debug output to help diagnose
-      console.log('Decorations model:', decorations);
       
       decorations.traverse((child) => {
         if (child.isMesh) {
-          console.log('Mesh found:', child.name, 'Material type:', child.material ? child.material.type : 'none');
-          
           // Force material to be MeshStandardMaterial
           if (child.material) {
             // Clone current material properties
@@ -149,18 +149,41 @@ class LobbyBackground {
         }
       });
       
-      // Store the model
       this.models.decorations = decorations;
       this.scene.add(decorations);
       
       // Force a couple of renders to update materials
       setTimeout(() => {
-        console.log("Forcing extra renders to update materials");
         for (let i = 0; i < 3; i++) {
           this.renderer.render(this.scene, this.camera);
         }
       }, 100);
     });
+  }
+  
+  // Method to update the map
+  updateMap(mapId) {
+    if (this.currentMap === mapId) return; // Skip if same map
+    
+    this.currentMap = mapId;
+    this.loadModels(mapId);
+  }
+  
+  // Method to clear existing models
+  clearModels() {
+    // Remove existing models from scene
+    if (this.models.track) {
+      this.scene.remove(this.models.track);
+    }
+    if (this.models.gates) {
+      this.scene.remove(this.models.gates);
+    }
+    if (this.models.decorations) {
+      this.scene.remove(this.models.decorations);
+    }
+    
+    // Reset models object
+    this.models = {};
   }
   
   onWindowResize() {
@@ -172,8 +195,6 @@ class LobbyBackground {
   animate() {
     requestAnimationFrame(this.animate.bind(this));
     
-    const delta = this.clock.getDelta();
-    
     // Update controls
     this.controls.update();
     
@@ -181,7 +202,6 @@ class LobbyBackground {
     this.renderer.render(this.scene, this.camera);
   }
 }
-
 
 // Add this function to your code, before or after setupEnhancedLighting()
 function setupCartoonySkybox(scene) {
@@ -223,7 +243,8 @@ function setupCartoonySkybox(scene) {
   
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
-  
 }
 
+// Export the background class and make it available globally
+window.LobbyBackground = LobbyBackground;
 export default LobbyBackground;

@@ -18,9 +18,23 @@
   <script type="module">
     import LobbyBackground from '/src/lobby-background.js';
     
+    // Create the background with default map (map1)
+    let lobbyBackground;
+    
     document.addEventListener('DOMContentLoaded', () => {
-      window.lobbyBackground = new LobbyBackground();
+      // Initialize the background
+      lobbyBackground = new LobbyBackground('map1');
+      
+      // Add a global event listener for map changes
+      document.addEventListener('mapChanged', (event) => {
+        if (lobbyBackground && event.detail && event.detail.mapId) {
+          lobbyBackground.updateMap(event.detail.mapId);
+        }
+      });
     });
+    
+    // Make background available globally if needed
+    window.lobbyBackground = lobbyBackground;
   </script>
 </head>
 <body>
