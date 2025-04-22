@@ -820,7 +820,6 @@ function showFinalLeaderboard() {
   homeButton.style.backgroundColor = '#ff0080';
   homeButton.style.border = '2px solid #b30059';
   homeButton.style.color = 'white';
-  homeButton.style.webkitTextStroke = '1px #b30059';
   homeButton.style.borderRadius = '5px';
   homeButton.style.cursor = 'pointer';
   homeButton.style.boxShadow = '0 4px 0 #b30059';
