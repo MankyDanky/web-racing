@@ -9,11 +9,17 @@ const minimap = {
   trackData: null,
   scale: 1,
   offsetX: 0,
-  offsetY: 0
+  offsetY: 0,
+  mapId: 'map1' // Default map ID
 };
 
 // Create the minimap canvas
-export function createMinimap() {
+export function createMinimap(mapId) {
+  // Use provided mapId or default to map1
+  if (mapId) {
+    minimap.mapId = mapId;
+  }
+  
   // Create canvas element
   minimap.canvas = document.createElement('canvas');
   minimap.canvas.width = minimap.size;
@@ -37,34 +43,51 @@ export function createMinimap() {
   document.body.appendChild(minimap.canvas);
   
   // Load the track curve for minimap
-  loadTrackCurve();
+  loadTrackCurve(minimap.mapId);
   
-  console.log('Minimap created');
+  console.log(`Minimap created for map: ${minimap.mapId}`);
   return minimap;
 }
 
 // Load the Bezier curve model for the track
-function loadTrackCurve() {
+function loadTrackCurve(mapId) {
   const loader = new GLTFLoader();
   
+  // Use the specified map's track outline
+  const trackOutlinePath = `/models/maps/${mapId}/track-outline.glb`;
+  console.log(`Loading track outline from: ${trackOutlinePath}`);
+  
   // Load the model containing the Bezier curve
-  // This assumes you've exported the curve as a separate model
   loader.load(
-    '/models/maps/map1/track-outline.glb', // Path to your exported curve model
+    trackOutlinePath,
     (gltf) => {
       const curveModel = gltf.scene;
-      console.log('Track curve model loaded for minimap');
+      console.log(`Track curve model loaded for minimap (${mapId})`);
       extractCurvePoints(curveModel);
     },
     (xhr) => {
       console.log(`Loading track curve: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
     },
     (error) => {
-      console.error('Error loading track curve:', error);
+      console.error(`Error loading track curve for ${mapId}:`, error);
       // Fallback to the regular track model if curve can't be loaded
       console.log('Will use regular track model as fallback');
     }
   );
+}
+
+// Add a function to update the minimap if the map changes
+export function updateMinimapTrack(mapId) {
+  if (mapId && mapId !== minimap.mapId) {
+    minimap.mapId = mapId;
+    console.log(`Updating minimap for new map: ${mapId}`);
+    
+    // Clear existing track data
+    minimap.trackData = null;
+    
+    // Load the new track outline
+    loadTrackCurve(mapId);
+  }
 }
 
 // Extract points from the Bezier curve model
@@ -212,7 +235,7 @@ function drawTrack() {
 
 // Keep the original extractTrackData function as a fallback
 export function extractTrackData(trackModel) {
-  console.log("Using dedicated track curve for minimap. Regular track model not needed.");
+  console.log(`Using dedicated track curve for minimap (${minimap.mapId}). Regular track model not needed.`);
   
   // If we already have track data, we don't need to extract it again
   if (minimap.trackData) {

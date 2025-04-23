@@ -1063,7 +1063,8 @@ function init() {
   createSpectatorUI(); // Add this line
   
   // Create minimap
-  minimapState = createMinimap();
+  const mapToLoad = gameConfig?.trackId || 'map1'; // Use the same map ID
+  minimapState = createMinimap(mapToLoad);
 
   // Make spectator functions globally available
   window.enterSpectatorMode = enterSpectatorMode;
