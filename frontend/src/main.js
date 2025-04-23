@@ -689,6 +689,7 @@ function showFinalLeaderboard() {
   
   // Create final leaderboard container
   const finalLeaderboard = document.createElement('div');
+  finalLeaderboard.id = 'final-leaderboard';
   finalLeaderboard.style.position = 'absolute';
   finalLeaderboard.style.top = '50%';
   finalLeaderboard.style.left = '50%';
