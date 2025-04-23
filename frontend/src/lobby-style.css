@@ -823,7 +823,7 @@ input::placeholder {
   margin: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1000px) {
   input {
     padding: 8px;
     max-width: 180px;
