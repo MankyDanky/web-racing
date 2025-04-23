@@ -347,10 +347,14 @@ html, body {
     transform-origin: bottom right;
   }
   
-  #finish-ui, #final-leaderboard {
-    transform: scale(0.5) !important;
+  #final-leaderboard {
+    transform: scale(0.5) translate(-100%, -100%) !important;
   }
-  
+
+  #finish-ui {
+    transform: scale(0.5) translate(0, -100%) !important; 
+  }
+
   #race-timer {
     transform: scale(0.5) translate(-50%, 0);
     transform-origin: top center;
