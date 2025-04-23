@@ -236,7 +236,7 @@ function createRaceTimer() {
 function createLeaderboard() {
   // Create leaderboard container
   leaderboard = document.createElement('div');
-  leaderboard.id = "leaderboard"; // ADD THIS LINE
+  leaderboard.id = "leaderboard"; 
   leaderboard.style.position = 'absolute';
   leaderboard.style.top = '20px';
   leaderboard.style.left = '20px';
