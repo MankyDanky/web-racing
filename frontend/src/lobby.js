@@ -1195,6 +1195,13 @@ class RacingLobby {
   document.addEventListener('DOMContentLoaded', () => {
     const lobby = new RacingLobby();
     
+    // Check for orientation changes
+    window.addEventListener('orientationchange', handleOrientationChange);
+    window.addEventListener('resize', handleOrientationChange);
+    
+    // Initial check
+    handleOrientationChange();
+    
     // Info popup functionality
     const infoBtn = document.getElementById('info-btn');
     const infoPopup = document.getElementById('info-popup');
@@ -1226,3 +1233,19 @@ class RacingLobby {
       });
     }
   });
+
+  // Function to handle orientation changes
+  function handleOrientationChange() {
+    const rotateMessage = document.getElementById('rotate-message');
+    const gameContainer = document.querySelector('.game-container');
+    
+    if (window.innerHeight > window.innerWidth) {
+      // Portrait mode
+      if (rotateMessage) rotateMessage.style.display = 'flex';
+      if (gameContainer) gameContainer.style.display = 'none';
+    } else {
+      // Landscape mode
+      if (rotateMessage) rotateMessage.style.display = 'none';
+      if (gameContainer) gameContainer.style.display = 'flex';
+    }
+  }

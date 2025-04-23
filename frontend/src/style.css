@@ -286,3 +286,118 @@ html, body {
   font-size: 1.2rem;
   -webkit-text-stroke: 1px #000;
 }
+
+/* Mobile responsiveness for game screen */
+#rotate-message {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  z-index: 10000;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.rotate-content {
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+}
+
+.rotate-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  animation: rotate 2s infinite linear;
+  display: block;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rotate-content p {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+/* Detect portrait orientation and show rotation message */
+@media (orientation: portrait) {
+  #rotate-message {
+    display: flex;
+  }
+  
+  canvas {
+    display: none;
+  }
+  
+  #racing-ui, #connection-ui, #leaderboard {
+    display: none !important;
+  }
+}
+
+/* Scale UI elements for smaller screens */
+@media (max-width: 900px) {
+  #speedometer {
+    transform: scale(0.5);
+    transform-origin: bottom right;
+  }
+  
+  #finish-ui {
+    transform: scale(0.5);
+  }
+
+  #final-leaderboard {
+    transform: scale(0.5);
+  }
+
+  #race-timer {
+    transform: scale(0.5) translate(-50%, 0);
+    transform-origin: top center;
+  }
+
+  #leaderboard {
+    transform: scale(0.5);
+    transform-origin: top left;
+  }
+
+  #minimap {
+    transform: scale(0.5);
+    transform-origin: top right;
+  }
+  
+  #spectator-ui {
+    transform: scale(0.5);
+    transform-origin: bottom center;
+  }
+
+  .exit-game-btn {
+    transform: scale(0.8);
+    transform-origin: bottom left;
+  }
+  
+  #joystick-container {
+    bottom: 90px;
+    left: 15px;
+    width: 110px;
+    height: 110px;
+  }
+  
+  #joystick-knob {
+    width: 45px;
+    height: 45px;
+  }
+
+  .loading-text {
+    display: none;
+  }
+
+  .loading-title {
+    font-size: 3rem;
+  }
+}
+

@@ -190,35 +190,46 @@ function createRaceUI() {
 function createRaceTimer() {
   // Create timer element
   raceTimer = document.createElement('div');
+  raceTimer.id = "race-timer"; 
   raceTimer.style.position = 'absolute';
   raceTimer.style.top = '20px';
   raceTimer.style.left = '50%';
-  raceTimer.style.transform = 'translateX(-50%)';
+  
+  // Create a nested container for content that will be centered
+  const timerContent = document.createElement('div');
+  timerContent.style.position = 'relative';
+  timerContent.style.left = '-50%'; // Center by shifting left instead of using transform
   
   // Match the styling of other UI elements
-  raceTimer.style.background = 'rgba(0, 0, 0, 0.5)';
-  raceTimer.style.color = '#fff';
-  raceTimer.style.padding = '10px 20px';
-  raceTimer.style.borderRadius = '10px';
-  raceTimer.style.fontFamily = "'Poppins', sans-serif";
-  raceTimer.style.fontSize = '28px';
-  raceTimer.style.fontWeight = 'bold';
-  raceTimer.style.textAlign = 'center';
+  timerContent.style.background = 'rgba(0, 0, 0, 0.5)';
+  timerContent.style.color = '#fff';
+  timerContent.style.padding = '10px 20px';
+  timerContent.style.borderRadius = '10px';
+  timerContent.style.fontFamily = "'Poppins', sans-serif";
+  timerContent.style.fontSize = '28px';
+  timerContent.style.fontWeight = 'bold';
+  timerContent.style.textAlign = 'center';
+  timerContent.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  timerContent.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+  
+  timerContent.innerText = '00:00';
+  
+  // Add content to container
+  raceTimer.appendChild(timerContent);
+  raceTimer.style.display = 'none';
   raceTimer.style.zIndex = '1000';
   
-  raceTimer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
-  raceTimer.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
-  
-  raceTimer.innerText = '00:00';
-  
-  raceTimer.style.display = 'none';
-  
   document.body.appendChild(raceTimer);
+  
+  // Keep a reference to the content element for updating the timer
+  raceTimer.contentElement = timerContent;
 }
 
+// In createLeaderboard() function
 function createLeaderboard() {
   // Create leaderboard container
   leaderboard = document.createElement('div');
+  leaderboard.id = "leaderboard"; // ADD THIS LINE
   leaderboard.style.position = 'absolute';
   leaderboard.style.top = '20px';
   leaderboard.style.left = '20px';
@@ -409,7 +420,7 @@ function startRaceTimer() {
 
 // Function to update the timer display
 function updateRaceTimer() {
-  if (!raceTimer) return;
+  if (!raceTimer || !raceTimer.contentElement) return;
   
   const elapsedMilliseconds = Date.now() - raceStartTime;
   const elapsedSeconds = Math.floor(elapsedMilliseconds / 1000);
@@ -420,7 +431,7 @@ function updateRaceTimer() {
   const formattedMinutes = String(minutes).padStart(2, '0');
   const formattedSeconds = String(seconds).padStart(2, '0');
   
-  raceTimer.innerText = `${formattedMinutes}:${formattedSeconds}`;
+  raceTimer.contentElement.innerText = `${formattedMinutes}:${formattedSeconds}`;
 }
 
 // Update the waiting for players UI
@@ -509,6 +520,7 @@ window.startCountdown = startCountdown;
 // Create spectator UI elements
 function createSpectatorUI() {
   spectatorUI = document.createElement('div');
+  spectatorUI.id = 'spectator-ui';
   spectatorUI.style.position = 'absolute';
   spectatorUI.style.bottom = '20px';
   spectatorUI.style.left = '50%';
@@ -892,6 +904,11 @@ function setupCartoonySkybox(scene) {
 
 // Initialize everything
 function init() {
+  // Check and handle orientation
+  handleOrientationChange();
+  window.addEventListener('orientationchange', handleOrientationChange);
+  window.addEventListener('resize', handleOrientationChange);
+
   // Set up loading manager to track all asset loading
   loadingManager = new THREE.LoadingManager();
   
@@ -1044,6 +1061,9 @@ function init() {
   // Make spectator functions globally available
   window.enterSpectatorMode = enterSpectatorMode;
   window.exitSpectatorMode = exitSpectatorMode;
+
+  // Create mobile controls
+  createMobileControls();
 }
 
 // Add this function to hide the loading screen
@@ -1360,6 +1380,179 @@ function checkAllPlayersFinished() {
   console.log(`Active players: ${activePlayers}, Finished count: ${finishedCount}`); 
   // All players have finished when finished count equals active players
   return finishedCount === activePlayers && activePlayers > 0;
+}
+
+// Add this function to your main.js
+function handleOrientationChange() {
+  const rotateMessage = document.getElementById('rotate-message');
+  const canvas = document.querySelector('canvas');
+  const joystickContainer = document.getElementById('joystick-container');
+  
+  if (window.innerHeight > window.innerWidth) {
+    // Portrait mode
+    if (rotateMessage) rotateMessage.style.display = 'flex';
+    if (canvas) canvas.style.display = 'none';
+    if (joystickContainer) joystickContainer.style.display = 'none';
+    
+    // Hide all game UI
+    const gameElements = document.querySelectorAll('#racing-ui, #connection-ui, #leaderboard');
+    gameElements.forEach(el => {
+      if (el) el.style.display = 'none';
+    });
+  } else {
+    // Landscape mode
+    if (rotateMessage) rotateMessage.style.display = 'none';
+    if (canvas) canvas.style.display = 'block';
+    
+    // Restore game UI visibility
+    const speedometer = document.getElementById('racing-ui');
+    const leaderboard = document.getElementById('leaderboard');
+    
+    if (speedometer) speedometer.style.display = 'block';
+    if (leaderboard) leaderboard.style.display = 'block';
+    
+    // Show joystick only on mobile in landscape mode
+    if (joystickContainer) {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+      joystickContainer.style.display = isMobile ? 'block' : 'none';
+    }
+  }
+  
+  // If renderer exists, update its size
+  if (renderer) {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+}
+
+// Add after the init() function and before animate()
+
+function createMobileControls() {
+  // Create joystick container
+  const joystickContainer = document.createElement('div');
+  joystickContainer.id = 'joystick-container';
+  joystickContainer.style.position = 'fixed';
+  joystickContainer.style.bottom = '100px';
+  joystickContainer.style.left = '20px';
+  joystickContainer.style.width = '120px';
+  joystickContainer.style.height = '120px';
+  joystickContainer.style.borderRadius = '50%';
+  joystickContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  joystickContainer.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+  joystickContainer.style.display = 'none'; // Hidden by default, shown on mobile
+  joystickContainer.style.zIndex = '1000';
+  joystickContainer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
+  joystickContainer.style.touchAction = 'none'; // Prevent scrolling on touch
+  
+  // Create joystick knob
+  const joystickKnob = document.createElement('div');
+  joystickKnob.id = 'joystick-knob';
+  joystickKnob.style.position = 'absolute';
+  joystickKnob.style.top = '50%';
+  joystickKnob.style.left = '50%';
+  joystickKnob.style.width = '50px';
+  joystickKnob.style.height = '50px';
+  joystickKnob.style.borderRadius = '50%';
+  joystickKnob.style.backgroundColor = '#ff0080';
+  joystickKnob.style.border = '2px solid #b30059';
+  joystickKnob.style.transform = 'translate(-50%, -50%)';
+  joystickKnob.style.boxShadow = '0 0 10px rgba(255, 0, 128, 0.5)';
+  
+  // Add knob to container
+  joystickContainer.appendChild(joystickKnob);
+  document.body.appendChild(joystickContainer);
+  
+  // Variables to track joystick state
+  let isJoystickActive = false;
+  let centerX, centerY;
+  const maxDistance = 40; // Maximum distance the knob can move from center
+  
+  // Function to update knob position
+  function updateKnobPosition(x, y) {
+    // Calculate distance from center
+    const deltaX = x - centerX;
+    const deltaY = y - centerY;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // Normalize if distance exceeds maximum
+    let moveX = deltaX;
+    let moveY = deltaY;
+    if (distance > maxDistance) {
+      moveX = (deltaX / distance) * maxDistance;
+      moveY = (deltaY / distance) * maxDistance;
+    }
+    
+    // Update knob position
+    joystickKnob.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+    
+    // Update keyState based on joystick position
+    const thresholdPercent = 0.3; // How far the joystick needs to move to trigger a key press
+    const threshold = maxDistance * thresholdPercent;
+    
+    // Clear previous state
+    keyState.w = false;
+    keyState.s = false;
+    keyState.a = false;
+    keyState.d = false;
+    
+    // Set new state based on position
+    if (moveY < -threshold) keyState.w = true;
+    if (moveY > threshold) keyState.s = true;
+    if (moveX < -threshold) keyState.a = true;
+    if (moveX > threshold) keyState.d = true;
+  }
+  
+  // Function to reset knob position
+  function resetKnobPosition() {
+    joystickKnob.style.transform = 'translate(-50%, -50%)';
+    // Reset keyState
+    keyState.w = false;
+    keyState.s = false;
+    keyState.a = false;
+    keyState.d = false;
+  }
+  
+  // Touch event handlers
+  joystickContainer.addEventListener('touchstart', function(e) {
+    isJoystickActive = true;
+    
+    // Get container position
+    const rect = joystickContainer.getBoundingClientRect();
+    centerX = rect.left + rect.width / 2;
+    centerY = rect.top + rect.height / 2;
+    
+    // Update knob position immediately
+    updateKnobPosition(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault();
+  });
+  
+  joystickContainer.addEventListener('touchmove', function(e) {
+    if (!isJoystickActive) return;
+    updateKnobPosition(e.touches[0].clientX, e.touches[0].clientY);
+    e.preventDefault();
+  });
+  
+  const touchEndHandler = function() {
+    if (!isJoystickActive) return;
+    isJoystickActive = false;
+    resetKnobPosition();
+  };
+  
+  joystickContainer.addEventListener('touchend', touchEndHandler);
+  joystickContainer.addEventListener('touchcancel', touchEndHandler);
+  
+  // Show joystick on mobile devices
+  function checkMobile() {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+    joystickContainer.style.display = isMobile ? 'block' : 'none';
+  }
+  
+  // Check on load and when window resizes
+  checkMobile();
+  window.addEventListener('resize', checkMobile);
+  
+  return joystickContainer;
 }
 
 // Start initialization

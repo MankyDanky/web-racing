@@ -22,6 +22,7 @@ export function createMinimap(mapId) {
   
   // Create canvas element
   minimap.canvas = document.createElement('canvas');
+  minimap.canvas.id = 'minimap';
   minimap.canvas.width = minimap.size;
   minimap.canvas.height = minimap.size;
   

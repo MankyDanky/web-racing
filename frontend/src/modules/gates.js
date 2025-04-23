@@ -245,6 +245,7 @@ export function showFinishMessage(totalGates, resetCallback) {
   
   // Create the FINISH text container
   const finishUI = document.createElement('div');
+  finishUI.id = 'finish-ui';
   finishUI.style.position = 'absolute';
   finishUI.style.top = '50%';
   finishUI.style.left = '0';

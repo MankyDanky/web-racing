@@ -784,3 +784,207 @@ input::placeholder {
   font-weight: 700;
   font-size: 1.2rem;
 }
+
+/* Portrait orientation message */
+#rotate-message {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+  z-index: 10000;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.rotate-content {
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+}
+
+.rotate-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  animation: rotate 2s infinite linear;
+  display: block;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.rotate-content p {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  input {
+    padding: 8px;
+    max-width: 180px;
+    margin-bottom: 0px;
+    box-shadow: 0px 3px 0px rgba(0, 0, 0, 1);
+    height: 40px;
+    font-size: 0.8rem;
+  }
+
+  input::placeholder {
+    font-size: 0.8rem;
+  }
+
+  #play-btn {
+    margin: 0px;
+    width: 180px;
+    font-size: 0.8rem;
+    min-height: 40px;
+  }
+
+  .center-panel h3 {
+    margin: 0;
+  }
+
+  .game-container {
+    width: 98%;
+    height: 98vh;
+  }
+  #car-model-container {
+    display: none;
+  }
+  .game-title {
+    font-size: 2.2rem;
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 10px;
+    -webkit-text-stroke: 2px #000;
+    text-shadow: 0px 3px 0px rgb(0, 0, 0);
+  }
+  
+  .panel-title {
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+  }
+  
+  .left-panel, .right-panel {
+    width: 28%;
+    top: 0px;
+  }
+
+  .right-panel {
+    width: 280px;
+  }
+
+  .code-input {
+    top: 10px;
+  }
+  
+  #join-code-input {
+    width: 100%;
+    max-width: 150px;
+    max-height: 40px;
+    font-size: 0.8rem;
+  }
+
+  #join-code-input::placeholder {
+    font-size: 0.8rem;
+  }
+
+  .left-panel {
+    left: 10px;
+  }
+  
+  .right-panel {
+    right: 10px;
+  }
+
+  .center-panel {
+    width: 40%;
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: calc(100vh - 200px);
+    overflow: visible;
+  }
+  
+  .color-carousel h3, 
+  .player-name-container h3,
+  .code-display h3, 
+  .code-input h3,
+  .join-section h3,
+  .game-info h3 {
+    font-size: 1.2rem;
+    margin-bottom: 8px;
+  }
+  
+
+  
+  .play-btn, .game-btn, #host-start-btn {
+    height: 45px;
+    font-size: 0.9rem;
+    max-width: 200px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 0 #b30059;
+  }
+  
+  .color-options {
+    gap: 5px;
+  }
+  
+  .color-option {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .code {
+    font-size: 1.5rem;
+    letter-spacing: 3px;
+  }
+
+  .code-box {
+    padding: 0px;
+    margin-bottom: 5px;
+  }
+
+  .code-instructions {
+    display: none;
+  }
+  
+  .player-list li {
+    font-size: 0.7rem;
+  }
+
+  .icon-btn {
+    padding: 6px 10px;
+    font-size: 0.7rem;
+  }
+  .dropdown-button, .dropdown-option {
+    font-size: 0.7rem;
+    padding: 8px 10px;
+  }
+  
+  .player-list li {
+    padding: 10px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+  }
+  
+  .exit-button, .host-badge {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+  }
+
+  .loading-text {
+    display: none;
+  }
+
+  .loading-title {
+    font-size: 3rem;
+    text-shadow: 0px 3px 0px rgb(0, 0, 0);
+  }
+}
