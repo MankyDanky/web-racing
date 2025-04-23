@@ -368,6 +368,9 @@ class RacingLobby {
       this.joinStatus.textContent = '';
       this.joinCodeInput.value = '';
       
+      // Re-enable map selection for single-player mode
+      this.mapSelectorContainer.classList.remove('disabled');
+      
       // Update player list to show no players
       this.updatePlayerList();
     }
@@ -445,6 +448,30 @@ class RacingLobby {
           // Update our local player list
           this.players = data.players;
           this.updatePlayerList();
+          
+          // Add these lines to update the map when receiving party state
+          if (data.trackId && data.trackId !== this.selectedMap) {
+            this.selectedMap = data.trackId;
+            
+            // Update the UI to show the selected map
+            const partyStateDropdownOptions = document.querySelectorAll('.dropdown-option');
+            const partyStateSelectedMapName = document.querySelector('.selected-map-name');
+            
+            partyStateDropdownOptions.forEach(opt => {
+              const mapId = opt.getAttribute('data-map-id');
+              if (mapId === data.trackId) {
+                opt.classList.add('selected');
+                partyStateSelectedMapName.textContent = opt.textContent;
+              } else {
+                opt.classList.remove('selected');
+              }
+            });
+            
+            // Dispatch an event to update the background
+            document.dispatchEvent(new CustomEvent('mapChanged', {
+              detail: { mapId: data.trackId }
+            }));
+          }
           break;
           
         case 'playerJoined':
