@@ -12,6 +12,7 @@ class RacingLobby {
       this.heartbeatInterval = null; // Store the interval for sending heartbeats
       this.connectionCheckInterval = null; // Store the interval for checking connections
       this.selectedMap = 'map1'; // Default map selection
+      this.isReady = false; // Add this line to track player's ready status
       
       // Initialize UI elements
       this.initUIElements();
@@ -154,7 +155,7 @@ class RacingLobby {
         }
       });
       
-      // Play button - simplify logic to ensure multiplayer when hosting
+      // Play button - modify logic to start multiplayer game without checking ready status
       this.playBtn.addEventListener('click', () => {
         // If player has entered a name, use it
         if (this.playerNameInput.value.trim()) {
@@ -162,12 +163,12 @@ class RacingLobby {
         }
         
         if (this.isHost) {
-          // Host always starts a multiplayer game
+          // Host starts a multiplayer game without checking ready status
           console.log("Starting multiplayer game as host");
           this.startMultiplayerGame();
         } else if (this.hostId) {
-          // If in a party but not host, show friendly message
-          alert('Only the host can start the race. Wait for the host to begin!');
+          // Toggle ready status when not host
+          this.toggleReadyStatus();
         } else {
           // Not in a party - start single player game
           console.log("Starting single player game");
@@ -293,6 +294,10 @@ class RacingLobby {
             
             // Ensure map selector remains disabled for non-hosts
             this.mapSelectorContainer.classList.add('disabled');
+            
+            // Change Play button to Ready button when joining a party
+            this.playBtn.textContent = 'Ready Up';
+            this.playBtn.classList.add('ready-button');
             
             // Send player info to host with color
             conn.send({
@@ -463,7 +468,8 @@ class RacingLobby {
               id: data.playerId,
               name: data.playerName,
               isHost: false,
-              playerColor: data.playerColor || 'red' // Save the player's color
+              isReady: false, // Initialize as not ready
+              playerColor: data.playerColor || 'red'
             };
             
             // Initialize heartbeat timestamp for this player
@@ -476,7 +482,7 @@ class RacingLobby {
             conn.send({
               type: 'partyState',
               players: this.players,
-              trackId: this.selectedMap // Use the selected map
+              trackId: this.selectedMap
             });
             
             // Notify other players about the new player
@@ -491,6 +497,23 @@ class RacingLobby {
           // Update our local player list
           this.players = data.players;
           this.updatePlayerList();
+          
+          // Check if client should update its own ready status
+          if (!this.isHost) {
+            const myPlayerInfo = this.players.find(p => p.id === this.playerId);
+            if (myPlayerInfo) {
+              this.isReady = myPlayerInfo.isReady;
+              
+              // Update ready button appearance
+              if (this.isReady) {
+                this.playBtn.textContent = 'Cancel Ready';
+                this.playBtn.classList.add('ready-active');
+              } else {
+                this.playBtn.textContent = 'Ready Up';
+                this.playBtn.classList.remove('ready-active');
+              }
+            }
+          }
           
           // Add these lines to update the map when receiving party state
           if (data.trackId && data.trackId !== this.selectedMap) {
@@ -546,6 +569,12 @@ class RacingLobby {
               this.players[playerIndex].name = data.playerName;
               this.players[playerIndex].playerColor = data.playerColor;
               
+              // Also update ready status if provided in the message
+              if (typeof data.isReady !== 'undefined') {
+                this.players[playerIndex].isReady = data.isReady;
+                console.log(`Updated player ${data.playerName} ready status: ${data.isReady}`);
+              }
+              
               // Update UI
               this.updatePlayerList();
               
@@ -596,7 +625,77 @@ class RacingLobby {
             detail: { mapId: data.trackId }
           }));
           break;
+
+        case 'playerReady':
+          if (this.isHost) {
+            // Find the player in the list
+            const playerIndex = this.players.findIndex(p => p.id === data.playerId);
+            if (playerIndex !== -1) {
+              // Update player ready status
+              this.players[playerIndex].isReady = data.isReady;
+              
+              // Update UI
+              this.updatePlayerList();
+              
+              // Broadcast the updated player list to all players
+              this.broadcastToAll({
+                type: 'partyState',
+                players: this.players,
+                trackId: this.selectedMap
+              });
+            }
+          }
+          break;
+
+        case 'kicked':
+          // Reset state and UI
+          this.hostId = null;
+          this.connections = [];
+          this.players = [];
+          
+          // Update UI
+          this.racersTitle.classList.add('hidden');
+          this.playersContainer.classList.add('hidden');
+          this.joinSection.classList.remove('hidden');
+          this.joinStatus.textContent = 'You were kicked from the party.';
+          this.joinCodeInput.value = '';
+          
+          // Remove ready button styling
+          this.playBtn.textContent = 'PLAY GAME';
+          this.playBtn.classList.remove('ready-button');
+          this.playBtn.classList.remove('ready-active');
+          
+          // Re-enable map selection for single-player mode
+          this.mapSelectorContainer.classList.remove('disabled');
+          
+          // Update player list to show no players
+          this.updatePlayerList();
+          break;
       }
+    }
+
+    toggleReadyStatus() {
+      console.log(`Toggling ready status. Current status: ${this.isReady}`);
+      this.isReady = !this.isReady;
+      console.log(`New ready status: ${this.isReady}`);
+      
+      // Update button text
+      if (this.isReady) {
+        this.playBtn.textContent = 'Cancel Ready';
+        this.playBtn.classList.add('ready-active');
+      } else {
+        this.playBtn.textContent = 'Ready Up';
+        this.playBtn.classList.remove('ready-active');
+      }
+      
+      // Send ready status to host
+      const message = {
+        type: 'playerReady',
+        playerId: this.playerId,
+        isReady: this.isReady
+      };
+      console.log('Sending ready status to host:', message);
+      this.sendToHost(message);
     }
     
     broadcastToAll(message, excludePeerId = null) {
@@ -621,7 +720,35 @@ class RacingLobby {
       } else {
         this.players.forEach(player => {
           const li = document.createElement('li');
-          li.textContent = player.name;
+          
+          // Create flex container for player info
+          li.style.display = 'flex';
+          li.style.alignItems = 'center';
+          li.style.gap = '8px';
+          
+          // Add ready status indicator for non-hosts
+          if (!player.isHost) {
+            const readyStatus = document.createElement('span');
+            if (player.isReady) {
+              readyStatus.innerHTML = '●'; // White filled circle for ready
+              readyStatus.style.color = '#ffffff';
+            } else {
+              readyStatus.innerHTML = '○'; // Hollow circle for not ready
+              readyStatus.style.color = '#888';
+            }
+            readyStatus.style.fontSize = '18px';
+            li.appendChild(readyStatus);
+          } else {
+            // Add a spacer for host alignment
+            const spacer = document.createElement('span');
+            spacer.style.width = '12px';
+            li.appendChild(spacer);
+          }
+          
+          // Player name
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = player.name;
+          li.appendChild(nameSpan);
           
           if (player.isHost) {
             const hostBadge = document.createElement('span');
@@ -629,6 +756,14 @@ class RacingLobby {
             hostBadge.classList.add('host-badge');
             li.appendChild(hostBadge);
           } 
+          // Add kick button for the host to remove other players
+          else if (this.isHost && player.id !== this.playerId) {
+            const kickButton = document.createElement('button');
+            kickButton.textContent = 'KICK';
+            kickButton.classList.add('exit-button'); // Reuse the exit button style
+            kickButton.addEventListener('click', () => this.kickPlayer(player.id));
+            li.appendChild(kickButton);
+          }
           // Add exit button for current player if not host
           else if (player.id === this.playerId && !this.isHost) {
             const exitButton = document.createElement('button');
@@ -659,6 +794,43 @@ class RacingLobby {
           trackId: this.selectedMap
         });
       }
+    }
+
+    kickPlayer(playerId) {
+      // Find the player to kick
+      const playerToKick = this.players.find(player => player.id === playerId);
+      if (!playerToKick) return;
+      
+      console.log(`Kicking player: ${playerToKick.name} (${playerId})`);
+      
+      // Find the connection to this player
+      const connectionToKick = this.connections.find(conn => conn.peerId === playerId);
+      
+      // Notify the player they've been kicked
+      if (connectionToKick && connectionToKick.connection) {
+        connectionToKick.connection.send({
+          type: 'kicked',
+          message: 'You have been kicked from the party by the host'
+        });
+        setTimeout(() => {
+          // Close the connection
+          try {
+            connectionToKick.connection.close();
+          } catch (e) {
+            console.log('Error closing connection:', e);
+          }
+        }, 200);
+      }
+      
+      // Remove the player from the list
+      this.removePlayer(playerId);
+      
+      // Broadcast updated player list to all remaining players
+      this.broadcastToAll({
+        type: 'partyState',
+        players: this.players,
+        trackId: this.selectedMap
+      });
     }
     
     startMultiplayerGame() {
