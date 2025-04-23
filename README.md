@@ -6,7 +6,7 @@ A real-time multiplayer 3D racing game built with JavaScript and modern web tech
 
 ## Play Now
 
-[Play Racez.io Online](https://youradikulshtestsite.com/racez)
+[Play Racez.io Online](https://racez.io)
 
 ## Features
 
