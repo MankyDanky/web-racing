@@ -6,7 +6,7 @@ const GATE_FADE_DURATION = 1.0;
 let _tempVector1 = new THREE.Vector3();
 
 // Function to load gates model
-export function loadGates(mapId = "map1", scene, onGatesLoaded) {
+export function loadGates(mapId, scene, loadingManager, onGatesLoaded) {
   // Initialize arrays and counters
   const gates = [];
   const fadingGates = {};
@@ -15,7 +15,8 @@ export function loadGates(mapId = "map1", scene, onGatesLoaded) {
   const currentGatePosition = new THREE.Vector3(0, 2, 0);
   const currentGateQuaternion = new THREE.Quaternion();
   
-  const loader = new GLTFLoader();
+  // Use the loading manager with your loader
+  const loader = new GLTFLoader(loadingManager);
   
   loader.load(
     `/models/maps/${mapId}/gates.glb`,

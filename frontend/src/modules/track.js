@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Function to load the track model and add to scene
-export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld, callback) {
-  const loader = new GLTFLoader();
+export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld, loadingManager, callback) {
+  // Use the loading manager with your loader
+  const loader = new GLTFLoader(loadingManager);
   
   loader.load(
     `/models/maps/${mapId}/track.glb`,
@@ -150,8 +151,9 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
 }
 
 // Function to load map decorations
-export function loadMapDecorations(mapId = "map1", scene, renderer, camera) {
-  const loader = new GLTFLoader();
+export function loadMapDecorations(mapId = "map1", scene, renderer, camera, loadingManager) {
+  // Use the loading manager with your loader
+  const loader = new GLTFLoader(loadingManager);
   
   loader.load(
     `/models/maps/${mapId}/decorations.glb`,

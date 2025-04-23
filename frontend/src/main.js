@@ -134,6 +134,11 @@ let finalLeaderboardShown = false;
 let playerFinishTimes = {};
 window.playerFinishTimes = playerFinishTimes;
 
+// Add these global variables at the top with your other globals:
+let loadingManager;
+let assetsToLoad = 0;
+let assetsLoaded = 0;
+
 // Add these functions before init():
 
 // Create the waiting and countdown UI elements
@@ -930,6 +935,25 @@ function setupCartoonySkybox(scene) {
 
 // Initialize everything
 function init() {
+  // Set up loading manager to track all asset loading
+  loadingManager = new THREE.LoadingManager();
+  
+  loadingManager.onLoad = function() {
+    console.log('All assets loaded');
+    hideLoadingScreen();
+  };
+  
+  loadingManager.onProgress = function(url, itemsLoaded, itemsTotal) {
+    console.log(`Loaded ${itemsLoaded} of ${itemsTotal} assets`);
+  };
+  
+  loadingManager.onError = function(url) {
+    console.error('Error loading asset:', url);
+  };
+  
+  // Make loadingManager globally available to other modules
+  window.loadingManager = loadingManager;
+
   console.log("Main module loaded");
   const loadingEl = document.createElement('div');
   loadingEl.style.position = 'absolute';
@@ -986,17 +1010,17 @@ function init() {
     
     // Load the track as a single model
     const mapToLoad = gameConfig?.trackId || 'map1'; // Default to map1 if no config
-    loadTrackModel(ammo, mapToLoad, scene, physicsWorld, (trackModel) => {
+    loadTrackModel(ammo, mapToLoad, scene, physicsWorld, loadingManager, (trackModel) => {
       console.log(`Track model loaded (${mapToLoad}), extracting for minimap`);
       // Extract track data for minimap when track is loaded
       extractTrackData(trackModel);
     });
     
     // Load map decorations
-    loadMapDecorations(mapToLoad, scene, renderer, camera);
+    loadMapDecorations(mapToLoad, scene, renderer, camera, loadingManager);
     
     // Load gates
-    gateData = loadGates(mapToLoad, scene, (loadedGateData) => {
+    gateData = loadGates(mapToLoad, scene, loadingManager, (loadedGateData) => {
       // Store the reference when gates are fully loaded
       gateData = loadedGateData;
       // Make gate data globally available for multiplayer
@@ -1069,6 +1093,22 @@ function init() {
   // Make spectator functions globally available
   window.enterSpectatorMode = enterSpectatorMode;
   window.exitSpectatorMode = exitSpectatorMode;
+}
+
+// Add this function to hide the loading screen
+function hideLoadingScreen() {
+  // Wait a small amount of time to ensure UI is ready
+  setTimeout(() => {
+    const loadingScreen = document.getElementById('loading-screen');
+    if (loadingScreen) {
+      loadingScreen.style.opacity = '0';
+      
+      // Remove from DOM after fade out
+      setTimeout(() => {
+        loadingScreen.style.display = 'none';
+      }, 500);
+    }
+  }, 500);
 }
 
 // Setup key controls for vehicle

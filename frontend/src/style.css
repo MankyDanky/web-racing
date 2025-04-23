@@ -197,3 +197,92 @@ html, body {
   transform: translateY(3px);
   box-shadow: 0 0 0 #b30059;
 }
+
+/* Loading Screen */
+#loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #121212;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.loading-title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 900;
+  font-size: 5rem;
+  text-transform: uppercase;
+  color: #ffffff;
+  -webkit-text-stroke: 3px #000;
+  letter-spacing: 4px;
+  margin-bottom: 50px;
+  text-shadow: 0px 5px 0px rgb(0, 0, 0);
+}
+
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.bar {
+  width: 12px;
+  height: 50px;
+  background-color: #ff0080;
+  border-radius: 3px;
+  animation: barLoad 1.5s infinite ease-in-out;
+  transform: scaleY(0.1);
+  box-shadow: 0 2px 0 #b30059;
+}
+
+.bar:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.bar:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.bar:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.bar:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+.bar:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+@keyframes barLoad {
+  0%, 100% {
+    transform: scaleY(0.1);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.loading-text {
+  color: #ffffff;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
+  -webkit-text-stroke: 1px #000;
+}

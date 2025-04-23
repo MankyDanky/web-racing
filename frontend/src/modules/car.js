@@ -27,6 +27,9 @@ const STEERING_RETURN_SPEED = 2;
 export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoaded) {
   console.log("Starting vehicle creation");
   
+  // Use the global loadingManager
+  const loader = new GLTFLoader(window.loadingManager);
+  
   // Car components that will be returned immediately for physics setup
   const carComponents = {
     carBody: null,

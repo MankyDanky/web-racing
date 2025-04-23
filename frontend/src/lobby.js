@@ -313,6 +313,18 @@ class RacingLobby {
               this.handleMessage(conn, data);
             });
             
+            // Handle connection closed - IMPORTANT: Add this handler
+            conn.on('close', () => {
+              console.log('Connection to host was closed');
+              this.handleHostDisconnection();
+            });
+            
+            // Add error handler to also catch disconnections
+            conn.on('error', (err) => {
+              console.error('Connection to host error:', err);
+              this.handleHostDisconnection();
+            });
+            
             // Start heartbeat monitoring
             this.startHeartbeatMonitoring();
             
@@ -328,6 +340,37 @@ class RacingLobby {
           console.error('Error looking up party:', error);
           this.joinStatus.textContent = 'Could not find that party. Check the code and try again.';
         });
+    }
+    
+    handleHostDisconnection() {
+      // Only process if we're actually in a party
+      if (!this.hostId) return;
+      
+      console.log('Host has disconnected - leaving party');
+      
+      // Clear heartbeat intervals
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
+      
+      // Reset state
+      this.hostId = null;
+      this.connections = [];
+      this.players = [];
+      
+      // Update UI
+      this.racersTitle.classList.add('hidden');
+      this.playersContainer.classList.add('hidden');
+      this.joinSection.classList.remove('hidden');
+      this.joinStatus.textContent = 'Host disconnected. Party ended.';
+      this.joinCodeInput.value = '';
+      
+      // Re-enable map selection for single-player mode
+      this.mapSelectorContainer.classList.remove('disabled');
+      
+      // Update player list to show no players
+      this.updatePlayerList();
     }
     
     leaveParty() {
