@@ -53,8 +53,8 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
   const maxEngineForce = 1000;
   const maxBrakingForce = 50;
   
-  // Calculate car speed in km/h (assuming your units are meters)
-  const speedKPH = velocityThree.length() * 3.6; // Convert m/s to km/h
+  // Calculate car speed in km/h
+  const speedKPH = velocityThree.length() * 3.6;
   
   // Check if the race has started before allowing engine forces
   let engineForce = 0;

@@ -183,6 +183,10 @@ class RacingLobby {
     }
     
     createParty() {
+      // Disable button and show loading state immediately
+      this.createPartyBtn.textContent = "Creating party...";
+      this.createPartyBtn.disabled = true;
+      
       this.isHost = true;
       
       // Hide join section when hosting
@@ -191,7 +195,6 @@ class RacingLobby {
       // Wait for peer ID to be assigned before creating party
       if (!this.playerId) {
         this.createPartyBtn.textContent = "Initializing...";
-        this.createPartyBtn.disabled = true;
         
         // Check every 100ms if peer ID is available
         const checkPeerId = setInterval(() => {
@@ -208,6 +211,9 @@ class RacingLobby {
     }
     
     createPartyWithPeerId() {
+      // Update button to show we're communicating with server
+      this.createPartyBtn.textContent = "Connecting to server...";
+      
       // Register with backend to get a short code
       fetch('https://mankydanky.pythonanywhere.com/api/party-codes/create/', {
         method: 'POST',
@@ -258,8 +264,16 @@ class RacingLobby {
       })
       .catch(error => {
         console.error('Error creating party:', error);
+        
+        // Reset the button
         this.createPartyBtn.textContent = "Create Party";
         this.createPartyBtn.disabled = false;
+        this.isHost = false;
+        
+        // Show join section again
+        this.joinSection.classList.remove('hidden');
+        
+        // Show error message
         alert("Error creating party. Please try again.");
       });
     }
@@ -947,6 +961,7 @@ class RacingLobby {
       this.hostInfo.classList.add('hidden');
       this.createPartyBtn.classList.remove('hidden');
       this.createPartyBtn.disabled = false;
+      this.createPartyBtn.textContent = "Create Party";
       this.joinSection.classList.remove('hidden');
       
       // Hide racers title and player list when no longer hosting

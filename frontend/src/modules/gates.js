@@ -320,7 +320,6 @@ export function showFinishMessage(totalGates, resetCallback) {
     setTimeout(() => {
       document.body.removeChild(finishUI);
       
-      // IMPORTANT CHANGE: Only show final leaderboard in single player mode here
       // For multiplayer, we'll let the main animation loop handle it when all players finish
       if (!window.raceState.isMultiplayer && window.showFinalLeaderboard) {
         window.showFinalLeaderboard();

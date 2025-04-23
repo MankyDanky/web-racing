@@ -69,16 +69,16 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   carComponents.vehicle = new ammo.btRaycastVehicle(tuning, carComponents.carBody, vehicleRaycaster);
   
   // Configure vehicle
-  carComponents.vehicle.setCoordinateSystem(0, 1, 2); // X=right, Y=up, Z=forward
+  carComponents.vehicle.setCoordinateSystem(0, 1, 2); 
   physicsWorld.addAction(carComponents.vehicle);
   
   // Wheel directions and axles
-  const wheelDirCS = new ammo.btVector3(0, -1, 0); // Down
-  const wheelAxleCS = new ammo.btVector3(-1, 0, 0); // Left
+  const wheelDirCS = new ammo.btVector3(0, -1, 0);
+  const wheelAxleCS = new ammo.btVector3(-1, 0, 0);
   
   // Add all four wheels
   const wheelPositions = [
-    { x: -WHEEL_X_OFFSET, y: 0, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, // Lowered y value
+    { x: -WHEEL_X_OFFSET, y: 0, z: WHEEL_Z_OFFSET, name: 'wheel-fl' }, 
     { x: WHEEL_X_OFFSET, y: 0, z: WHEEL_Z_OFFSET, name: 'wheel-fr' },  
     { x: -WHEEL_X_OFFSET, y: 0, z: -WHEEL_Z_OFFSET, name: 'wheel-bl' }, 
     { x: WHEEL_X_OFFSET, y: 0, z: -WHEEL_Z_OFFSET, name: 'wheel-br' }  
@@ -87,7 +87,7 @@ export function createVehicle(ammo, scene, physicsWorld, debugObjects, onCarLoad
   // Create wheels with physics (but without visuals yet)
   for (let i = 0; i < wheelPositions.length; i++) {
     const pos = wheelPositions[i];
-    const isFront = i < 2; // First two are front wheels
+    const isFront = i < 2; 
     
     // Connect wheel to vehicle
     const connectionPoint = new ammo.btVector3(pos.x, pos.y, pos.z);
@@ -215,7 +215,7 @@ function loadCarModel(ammo, scene, carComponents, wheelPositions, onModelLoaded)
           const wheelGeometry = new THREE.CylinderGeometry(
             WHEEL_RADIUS, WHEEL_RADIUS, WHEEL_WIDTH, 24
           );
-          wheelGeometry.rotateZ(Math.PI/2); // Align with X axis
+          wheelGeometry.rotateZ(Math.PI/2); 
           
           const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
           const wheelMesh = new THREE.Mesh(wheelGeometry, wheelMaterial);
@@ -328,17 +328,17 @@ export function updateSteering(deltaTime, vehicle, keyState, currentSteeringAngl
   let targetSteeringAngle = 0;
   
   if (keyState.a) {
-    targetSteeringAngle = maxSteeringAngle; // Left
+    targetSteeringAngle = maxSteeringAngle; 
   } else if (keyState.d) {
-    targetSteeringAngle = -maxSteeringAngle; // Right
+    targetSteeringAngle = -maxSteeringAngle;
   }
   
   // Determine appropriate steering speed
   const steeringSpeed = (targetSteeringAngle === 0 || 
                          (currentSteeringAngle > 0 && targetSteeringAngle < 0) || 
                          (currentSteeringAngle < 0 && targetSteeringAngle > 0)) ? 
-    STEERING_RETURN_SPEED : // Return to center faster
-    STEERING_SPEED;         // Turn at normal speed
+    STEERING_RETURN_SPEED : 
+    STEERING_SPEED;         
   
   // Smoothly interpolate current steering angle towards target
   const steeringDelta = targetSteeringAngle - currentSteeringAngle;
@@ -364,16 +364,14 @@ export function updateSteering(deltaTime, vehicle, keyState, currentSteeringAngl
 // Add a new function to calculate max steering angle based on speed
 function calculateMaxSteeringAngle(speedKPH) {
   // Constants for steering behavior
-  const MIN_SPEED = 0;    // Speed at which steering is at maximum (KPH)
-  const MAX_SPEED = 150;  // Speed at which steering is minimum (KPH)
-  const MIN_ANGLE = 0.15; // Minimum steering angle at high speeds (radians)
-  const MAX_ANGLE = 0.4;  // Maximum steering angle at low speeds (radians)
+  const MIN_SPEED = 0;   
+  const MAX_SPEED = 150; 
+  const MIN_ANGLE = 0.15;
+  const MAX_ANGLE = 0.4; 
   
   // Clamp the speed to avoid extreme values
   const clampedSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, speedKPH));
   
-  // Linear interpolation from MAX_ANGLE to MIN_ANGLE based on speed
-  // As speed increases from MIN_SPEED to MAX_SPEED, angle decreases from MAX_ANGLE to MIN_ANGLE
   const speedFactor = (clampedSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED);
   const steeringAngle = MAX_ANGLE - speedFactor * (MAX_ANGLE - MIN_ANGLE);
   

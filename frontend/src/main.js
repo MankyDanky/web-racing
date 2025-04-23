@@ -1,24 +1,18 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import "./style.css";
 import Ammo from './lib/ammo.js';
-import Peer from 'peerjs';
 import { createVehicle, updateSteering, resetCarPosition, updateCarPosition } from './modules/car.js';
 import { loadTrackModel, loadMapDecorations, checkGroundCollision } from './modules/track.js';
 import { 
   loadGates, 
-  startGateFadeIn, 
   updateGateFading, 
   checkGateProximity, 
   showFinishMessage, 
-  resetRace 
 } from './modules/gates.js';
 import { 
   initMultiplayer, 
   updateMarkers, 
   sendCarData,
-  updateOpponentCarPosition 
 } from './modules/multiplayer.js';
 import { initPhysics, updatePhysics, FIXED_PHYSICS_STEP } from './modules/physics.js';
 import { createMinimap, extractTrackData, updateMinimapPlayers } from './modules/minimap.js';
@@ -26,7 +20,6 @@ import { createMinimap, extractTrackData, updateMinimapPlayers } from './modules
 // Check for game config from lobby
 let gameConfig = null;
 let isHost = false;
-let playerConnections = [];
 let allPlayers = [];
 
 try {
@@ -51,14 +44,12 @@ try {
 // Global variables
 let camera, scene, renderer, controls;
 let physicsWorld, tmpTrans;
-const rigidBodies = [];
 let debugObjects = [];
 const clock = new THREE.Clock();
-let trackPieces = {}; // Dictionary to store loaded track models
 
 // Car components
 let carBody;
-let vehicle; // Ammo.js vehicle instance
+let vehicle;
 let wheelMeshes = [];
 let carModel;
 
@@ -68,26 +59,25 @@ const keyState = {
 };
 
 // Camera parameters
-const CAMERA_DISTANCE = 10;   // Distance behind the car
-const CAMERA_HEIGHT = 5;      // Height above the car
-const CAMERA_LERP = 0.1;      // Smoothing factor (0-1)
-const CAMERA_LOOK_AHEAD = 2;  // How far ahead of the car to look
+const CAMERA_DISTANCE = 10;  
+const CAMERA_HEIGHT = 5;     
+const CAMERA_LERP = 0.1;     
+const CAMERA_LOOK_AHEAD = 2; 
 
 // Steering parameters
-let currentSteeringAngle = 0;   // Current steering angle
+let currentSteeringAngle = 0; 
 
 // UI variables
 let speedElement;
 let needleElement;
 let speedValueElement;
 let currentSpeed = 0;
-const MAX_SPEED_KPH = 200; // Maximum speed on the gauge
+const MAX_SPEED_KPH = 200; 
 
 // Multiplayer variables
 let multiplayerState;
 
 let gateData = null;
-let _tempVector1 = new THREE.Vector3();
 let currentGatePosition = new THREE.Vector3(0, 2, 0);
 let currentGateQuaternion = new THREE.Quaternion();
 
@@ -97,7 +87,7 @@ let raceState = {
   allPlayersConnected: false,
   countdownStarted: false,
   raceStarted: false,
-  raceFinished: false,  // Add this line
+  raceFinished: false,  
   countdownValue: 3
 };
 
@@ -113,7 +103,6 @@ window.raceState = raceState;
 let countdownOverlay;
 let waitingForPlayersOverlay;
 
-// Add this to your global variables
 let leaderboard;
 let playerPositions = [];
 
@@ -126,20 +115,13 @@ let activeRacers = [];
 // Add this variable to your global variables section
 let minimapState;
 
-// Add this to the global variables section:
-let finishedPlayers = new Set();
 let finalLeaderboardShown = false;
 
-// Add this to the global variables section
 let playerFinishTimes = {};
 window.playerFinishTimes = playerFinishTimes;
 
-// Add these global variables at the top with your other globals:
 let loadingManager;
-let assetsToLoad = 0;
-let assetsLoaded = 0;
 
-// Add these functions before init():
 
 // Create the waiting and countdown UI elements
 function createRaceUI() {
@@ -151,8 +133,8 @@ function createRaceUI() {
   waitingForPlayersOverlay.style.transform = 'translate(-50%, -50%)';
   
   // Updated to match speedometer
-  waitingForPlayersOverlay.style.background = 'rgba(0, 0, 0, 0.5)'; // Match speedometer opacity
-  waitingForPlayersOverlay.style.color = '#fff'; // White text like speedometer
+  waitingForPlayersOverlay.style.background = 'rgba(0, 0, 0, 0.5)'; 
+  waitingForPlayersOverlay.style.color = '#fff'; 
   waitingForPlayersOverlay.style.padding = '30px 40px';
   waitingForPlayersOverlay.style.borderRadius = '10px';
   waitingForPlayersOverlay.style.fontFamily = "'Poppins', sans-serif";
@@ -160,7 +142,6 @@ function createRaceUI() {
   waitingForPlayersOverlay.style.textAlign = 'center';
   waitingForPlayersOverlay.style.zIndex = '1000';
   
-  // Add the box shadow and text glow like the speedometer
   waitingForPlayersOverlay.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
   
   // Updated HTML with styled title
@@ -182,7 +163,7 @@ function createRaceUI() {
   countdownOverlay.style.padding = '40px 60px';
   countdownOverlay.style.borderRadius = '10px';
   countdownOverlay.style.fontFamily = "'Poppins', sans-serif";
-  countdownOverlay.style.fontSize = '60px'; // Larger font for better visibility
+  countdownOverlay.style.fontSize = '60px';
   countdownOverlay.style.fontWeight = 'bold';
   countdownOverlay.style.textAlign = 'center';
   countdownOverlay.style.zIndex = '1000';
@@ -202,7 +183,7 @@ function createRaceUI() {
   document.body.appendChild(countdownOverlay);
   
   // Make countdown overlay globally accessible for multiplayer.js
-  window.countdownOverlay = countdownOverlay; // Add this line
+  window.countdownOverlay = countdownOverlay; 
 }
 
 // Create the timer UI
@@ -225,20 +206,16 @@ function createRaceTimer() {
   raceTimer.style.textAlign = 'center';
   raceTimer.style.zIndex = '1000';
   
-  // Add the box shadow and text glow like the speedometer
   raceTimer.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
   raceTimer.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
   
   raceTimer.innerText = '00:00';
   
-  // Hide initially
   raceTimer.style.display = 'none';
   
-  // Add to document
   document.body.appendChild(raceTimer);
 }
 
-// Modify the createLeaderboard function to always display the leaderboard
 function createLeaderboard() {
   // Create leaderboard container
   leaderboard = document.createElement('div');
@@ -258,7 +235,6 @@ function createLeaderboard() {
   leaderboard.style.zIndex = '1000';
   leaderboard.style.minWidth = '220px';
   
-  // Add the box shadow and text glow like the speedometer
   leaderboard.style.boxShadow = '0 0 20px rgba(0, 0, 0, 0.5)';
   leaderboard.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.3)';
   
@@ -270,10 +246,8 @@ function createLeaderboard() {
     <div id="leaderboard-positions"></div>
   `;
   
-  // Hide initially - will be shown when race starts for both single and multiplayer
   leaderboard.style.display = 'none';
   
-  // Add to document
   document.body.appendChild(leaderboard);
 }
 
@@ -317,7 +291,6 @@ function updateLeaderboard() {
     }
   }
   
-  // Add myself to positions array
   playerPositions.push({
     id: myPlayerId,
     name: myName,
@@ -356,7 +329,7 @@ function updateLeaderboard() {
       if (b.gateIndex !== a.gateIndex) {
         return b.gateIndex - a.gateIndex;
       }
-      // Then by distance to next gate (lower is better)
+      // Then by distance to next gate 
       const distA = isFinite(a.distanceToNextGate) ? a.distanceToNextGate : 1000000;
       const distB = isFinite(b.distanceToNextGate) ? b.distanceToNextGate : 1000000;
       return distA - distB;
@@ -370,7 +343,7 @@ function updateLeaderboard() {
     }
   });
   
-  // Generate HTML for leaderboard - REMOVED GATE INFORMATION
+  // Generate HTML for leaderboard
   let leaderboardHTML = '';
   playerPositions.forEach((player, index) => {
     // In single player mode, always show as position 1
@@ -407,7 +380,7 @@ function getPositionColor(position) {
   switch (position) {
     case 1: return 'gold';
     case 2: return 'silver';
-    case 3: return '#cd7f32'; // bronze
+    case 3: return '#cd7f32'; 
     default: return 'white';
   }
 }
@@ -448,18 +421,6 @@ function updateRaceTimer() {
   const formattedSeconds = String(seconds).padStart(2, '0');
   
   raceTimer.innerText = `${formattedMinutes}:${formattedSeconds}`;
-}
-
-// Function to reset the timer
-function resetRaceTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-  }
-  
-  if (raceTimer) {
-    raceTimer.innerText = '00:00';
-    raceTimer.style.display = 'none';
-  }
 }
 
 // Update the waiting for players UI
@@ -699,7 +660,6 @@ function updateSpectatorCamera() {
   camera.lookAt(lookAtPos);
 }
 
-// Add this function to main.js
 function showFinalLeaderboard() {
   // Hide all existing UI elements
   if (speedometer) speedometer.style.display = 'none';
@@ -769,7 +729,6 @@ function showFinalLeaderboard() {
   table.style.borderCollapse = 'collapse';
   table.style.marginBottom = '30px';
   
-  // Add header row
   const headerRow = document.createElement('tr');
   headerRow.innerHTML = `
     <th style="padding: 10px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.3);">POSITION</th>
@@ -888,18 +847,16 @@ function getPlayerColorHex(colorName) {
   return colorMap[colorName] || '#ff7070';
 }
 
-// Make this function available globally
 window.showFinalLeaderboard = showFinalLeaderboard;
 
-// Add this function to your code, before or after setupEnhancedLighting()
 function setupCartoonySkybox(scene) {
   // Create shader materials for gradient skybox
-  const skyGeo = new THREE.SphereGeometry(1000, 32, 32); // Large sphere to contain the scene
+  const skyGeo = new THREE.SphereGeometry(1000, 32, 32);
   
   // Shader material for gradient
   const uniforms = {
-    topColor: { value: new THREE.Color(0x88ccff) },  // Light blue at top
-    bottomColor: { value: new THREE.Color(0xbbe2ff) }, // White/light color at horizon
+    topColor: { value: new THREE.Color(0x88ccff) },  
+    bottomColor: { value: new THREE.Color(0xbbe2ff) }, 
     offset: { value: 0 },
     exponent: { value: 0.6 }
   };
@@ -926,7 +883,7 @@ function setupCartoonySkybox(scene) {
         gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
       }
     `,
-    side: THREE.BackSide // Render the inside of the sphere
+    side: THREE.BackSide 
   });
   
   const sky = new THREE.Mesh(skyGeo, skyMat);
@@ -1032,8 +989,6 @@ function init() {
 
     // First create just the physics body, don't set global variables yet
     const carComponents = createVehicle(ammo, scene, physicsWorld, debugObjects, (loadedComponents) => {
-      // This callback runs when the car model is FULLY loaded
-      console.log("Car fully loaded callback - setting global variables now");
       
       // Now set all the global variables
       carBody = loadedComponents.carBody;
@@ -1061,9 +1016,6 @@ function init() {
     carBody = carComponents.carBody;
     vehicle = carComponents.vehicle;
     
-    // Don't set carModel or wheelMeshes yet
-    // Don't start animation loop yet
-    
     // Set up controls early so they work when the car loads
     setupKeyControls();
     
@@ -1080,14 +1032,13 @@ function init() {
   // Check if this is a multiplayer game
   raceState.isMultiplayer = gameConfig && gameConfig.players && gameConfig.players.length > 1;
 
-  // Later, after you've created the UI:
   createRaceUI();
   createRaceTimer();
   createLeaderboard();
   createSpectatorUI(); // Add this line
   
   // Create minimap
-  const mapToLoad = gameConfig?.trackId || 'map1'; // Use the same map ID
+  const mapToLoad = gameConfig?.trackId || 'map1'; 
   minimapState = createMinimap(mapToLoad);
 
   // Make spectator functions globally available
@@ -1250,7 +1201,7 @@ function animate() {
         if (raceFinished) {
           // Only show finish message if we haven't already shown it
           if (!raceState.raceFinished) {
-            showFinishMessage(gateData.totalGates, null); // Remove the reset callback
+            showFinishMessage(gateData.totalGates, null); 
             
             // Stop the race timer
             if (timerInterval) {
@@ -1260,7 +1211,7 @@ function animate() {
             // In multiplayer mode, broadcast that you've finished
             if (raceState.isMultiplayer && isHost) {
               // Use existing broadcast mechanism or add a new one for race finish
-              multiplayerState.broadcastRaceStart(); // Reuse existing function
+              multiplayerState.broadcastRaceStart(); 
             }
           }
         }
@@ -1369,8 +1320,6 @@ function updateSpeedometer(speed) {
   // Update the gauge fill rotation
   speedElement.style.transform = `rotate(${fillRotation}deg)`;
   
-  // Update the needle rotation to perfectly align with the gauge fill
-  // Use the same exact rotation as the fill since we want them to align perfectly
   needleElement.style.transform = `rotate(${fillRotation - 90}deg)`;
   
   // Update the numeric display, rounded to integer
@@ -1392,7 +1341,7 @@ function checkAllPlayersFinished() {
   if (raceState.raceFinished) {
     finishedCount++;
   }
-  activePlayers++; // Always count myself as active
+  activePlayers++; 
   
   // Check opponents
   Object.values(multiplayerState.opponentCars).forEach(opponent => {

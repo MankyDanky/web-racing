@@ -122,9 +122,6 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
   // Create track collision shape using triangle mesh
   const trackShape = new ammo.btBvhTriangleMeshShape(triangleMesh, true, true);
 
-  // Add a slight margin to the track collision shape to smooth transitions
-  trackShape.setMargin(0.05); // 5cm margin helps smooth over minor gaps
-  
   // The rigid body uses identity transform since all transformations are in the vertices
   const trackTransform = new ammo.btTransform();
   trackTransform.setIdentity();

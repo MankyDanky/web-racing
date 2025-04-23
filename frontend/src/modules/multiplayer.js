@@ -10,13 +10,12 @@ const state = {
   gameConfig: null,
   isHost: false,
   allPlayers: [],
-  allCarsData: {}, // Add this property to store all car positions
-  lastBroadcastTime: 0 // Track when we last broadcasted
+  allCarsData: {},
+  lastBroadcastTime: 0
 };
 
-// Add these variables at the top of the file
 let connectionRetryCount = 0;
-const MAX_RETRIES = 15; // Try for 30 seconds
+const MAX_RETRIES = 15;
 
 // Initialize multiplayer from game config
 export function initMultiplayer(gameState) {
@@ -44,15 +43,12 @@ export function initMultiplayer(gameState) {
     initPeerConnection(gameState);
   }
   
-  // Add these two lines to attach methods to the state object
   state.checkAllPlayersConnected = checkAllPlayersConnected;
   state.broadcastRaceStart = broadcastRaceStart;
-  state.broadcastCountdownStart = broadcastCountdownStart; // Add this line
+  state.broadcastCountdownStart = broadcastCountdownStart; 
   
   return state;
 }
-
-// Fix how connections are established and message handlers are attached
 
 function initPeerConnection(gameState) {
   // Get the player ID that was stored during lobby creation
@@ -81,7 +77,6 @@ function initPeerConnection(gameState) {
           state.peer.on('connection', (conn) => {
             console.log('Player connected:', conn.peer);
             
-            // CRITICAL FIX: Wait for connection to be fully ready
             conn.on('open', () => {
               console.log('Connection to player fully established:', conn.peer);
               state.playerConnections.push(conn);
@@ -154,7 +149,7 @@ function initPeerConnection(gameState) {
           setTimeout(() => initPeerConnection(gameState), 2000);
         }
       });
-    }, 1000); // Add a 1-second delay before creating the peer
+    }, 1000); 
   } else {
     console.warn('No game config found - multiplayer disabled');
   }
@@ -573,7 +568,6 @@ export function sendCarData(gameState) {
     playerColor: playerColor,
     position: safePosition,
     quaternion: safeQuaternion,
-    // Add race progress data with safe values
     raceProgress: {
       currentGateIndex: currentGateIndex,
       distanceToNextGate: distanceToNextGate
@@ -614,7 +608,6 @@ export function sendCarData(gameState) {
   }
 }
 
-// Add method to check if all players are connected
 export function checkAllPlayersConnected() {
   if (!state.gameConfig || !state.gameConfig.players) return false;
   
@@ -634,7 +627,6 @@ export function checkAllPlayersConnected() {
   return connectedCount === state.gameConfig.players.length;
 }
 
-// Add method to broadcast race start
 export function broadcastRaceStart() {
   state.playerConnections.forEach(conn => {
     try {
@@ -678,7 +670,6 @@ export function broadcastCountdownStart() {
   
 }
 
-// Add this function to broadcast all car positions from host to clients
 function broadcastAllCarsData() {
   if (!state.isHost || state.playerConnections.length === 0) return;
   
