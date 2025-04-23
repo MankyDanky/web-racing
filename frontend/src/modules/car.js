@@ -320,14 +320,17 @@ function loadFallbackCarModel(ammo, scene, carComponents, wheelPositions, onMode
 }
 
 // Update steering based on key state
-export function updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle) {
+export function updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle, currentSpeed = 0) {
+  // Calculate dynamic maximum steering angle based on speed
+  const maxSteeringAngle = calculateMaxSteeringAngle(currentSpeed);
+  
   // Calculate target steering angle based on key state
   let targetSteeringAngle = 0;
   
   if (keyState.a) {
-    targetSteeringAngle = MAX_STEERING_ANGLE; // Left
+    targetSteeringAngle = maxSteeringAngle; // Left
   } else if (keyState.d) {
-    targetSteeringAngle = -MAX_STEERING_ANGLE; // Right
+    targetSteeringAngle = -maxSteeringAngle; // Right
   }
   
   // Determine appropriate steering speed
@@ -356,6 +359,25 @@ export function updateSteering(deltaTime, vehicle, keyState, currentSteeringAngl
   }
   
   return newSteeringAngle;
+}
+
+// Add a new function to calculate max steering angle based on speed
+function calculateMaxSteeringAngle(speedKPH) {
+  // Constants for steering behavior
+  const MIN_SPEED = 0;    // Speed at which steering is at maximum (KPH)
+  const MAX_SPEED = 150;  // Speed at which steering is minimum (KPH)
+  const MIN_ANGLE = 0.15; // Minimum steering angle at high speeds (radians)
+  const MAX_ANGLE = 0.4;  // Maximum steering angle at low speeds (radians)
+  
+  // Clamp the speed to avoid extreme values
+  const clampedSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, speedKPH));
+  
+  // Linear interpolation from MAX_ANGLE to MIN_ANGLE based on speed
+  // As speed increases from MIN_SPEED to MAX_SPEED, angle decreases from MAX_ANGLE to MIN_ANGLE
+  const speedFactor = (clampedSpeed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED);
+  const steeringAngle = MAX_ANGLE - speedFactor * (MAX_ANGLE - MIN_ANGLE);
+  
+  return steeringAngle;
 }
 
 // Reset car position 

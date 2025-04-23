@@ -53,6 +53,9 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
   const maxEngineForce = 1000;
   const maxBrakingForce = 50;
   
+  // Calculate car speed in km/h (assuming your units are meters)
+  const speedKPH = velocityThree.length() * 3.6; // Convert m/s to km/h
+  
   // Check if the race has started before allowing engine forces
   let engineForce = 0;
   let brakingForce = 0;
@@ -95,15 +98,12 @@ export function updatePhysics(deltaTime, ammo, physicsState, carState, debugObje
     vehicle.setBrake(brakingForce, i);
   }
 
-  let  newSteeringAngle = 0;
+  let newSteeringAngle = 0;
   
-  // Call updateSteering to update the steering angle
+  // Call updateSteering to update the steering angle, passing the current speed
   if (!raceState.raceFinished) {
-    newSteeringAngle = updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle);
+    newSteeringAngle = updateSteering(deltaTime, vehicle, keyState, currentSteeringAngle, speedKPH);
   }
-  
-  // Calculate car speed in km/h (assuming your units are meters)
-  const speedKPH = velocityThree.length() * 3.6; // Convert m/s to km/h
   
   // Clean up Ammo.js objects to prevent memory leaks
   ammo.destroy(velocity);
