@@ -3,16 +3,52 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 class LobbyBackground {
-  constructor(initialMap = 'map1') {
+  constructor() {
     this.scene = null;
     this.camera = null;
     this.renderer = null;
     this.controls = null;
-    this.models = {};
+    this.availableMaps = ['map1', 'map2']; // Define all available maps
+    this.mapModels = {}; // Store models for each map
+    this.currentMap = 'map1'; // Default active map
     this.clock = new THREE.Clock();
-    this.currentMap = initialMap;
+    this.loadingManager = new THREE.LoadingManager();
+    this.totalAssetsToLoad = this.availableMaps.length * 3; // 3 files per map (track, gates, decorations)
+    this.loadedAssets = 0;
     
+    this.setupLoadingManager();
     this.init();
+  }
+  
+  setupLoadingManager() {
+    // Setup loading manager events
+    this.loadingManager.onLoad = () => {
+      console.log('All map assets loaded successfully');
+      this.hideLoadingScreen();
+    };
+    
+    this.loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+      console.log(`Loaded ${itemsLoaded} of ${itemsTotal} files`);
+      // Update loading progress if needed
+    };
+    
+    this.loadingManager.onError = (url) => {
+      console.error('Error loading', url);
+    };
+  }
+  
+  hideLoadingScreen() {
+    setTimeout(() => {
+      const loadingScreen = document.getElementById('loading-screen');
+      if (loadingScreen) {
+        loadingScreen.style.opacity = '0';
+        
+        // Remove from DOM after fade out
+        setTimeout(() => {
+          loadingScreen.style.display = 'none';
+        }, 500);
+      }
+    }, 500);
   }
   
   init() {
@@ -62,7 +98,9 @@ class LobbyBackground {
     this.controls.autoRotateSpeed = 0.5;
     
     this.setupLights();
-    this.loadModels(this.currentMap);
+    
+    // Load all available maps at once
+    this.preloadAllMaps();
 
     // Handle window resize
     window.addEventListener('resize', this.onWindowResize.bind(this));
@@ -83,25 +121,43 @@ class LobbyBackground {
     this.scene.add(directionalLight);
   }
   
-  // Method to load models based on map ID
-  loadModels(mapId) {
-    console.log(`Loading background models for ${mapId}`);
-    const loader = new GLTFLoader();
+  // Preload all available maps
+  preloadAllMaps() {
+    console.log('Preloading all map assets...');
     
-    // Clear existing models first
-    this.clearModels();
+    // Create a group for each map to hold its models
+    this.availableMaps.forEach(mapId => {
+      this.mapModels[mapId] = {
+        group: new THREE.Group(),
+        loaded: false
+      };
+      
+      // Add the group to the scene but hide it initially
+      this.scene.add(this.mapModels[mapId].group);
+      this.mapModels[mapId].group.visible = mapId === this.currentMap;
+      
+      // Load the map's assets
+      this.loadMapAssets(mapId);
+    });
+  }
+  
+  // Load assets for a specific map
+  loadMapAssets(mapId) {
+    console.log(`Loading assets for ${mapId}`);
+    const loader = new GLTFLoader(this.loadingManager);
+    const mapGroup = this.mapModels[mapId].group;
     
     // Load track
     loader.load(`/models/maps/${mapId}/track.glb`, (gltf) => {
       const track = gltf.scene;
       track.traverse((child) => {
         if (child.isMesh) {
-            child.receiveShadow = true;
-            child.castShadow = true;
+          child.receiveShadow = true;
+          child.castShadow = true;
         }
       });
-      this.models.track = track;
-      this.scene.add(track);
+      mapGroup.add(track);
+      this.mapModels[mapId].track = track;
     });
     
     // Load gates
@@ -109,12 +165,12 @@ class LobbyBackground {
       const gates = gltf.scene;
       gates.traverse((child) => {
         if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
       });
-      this.models.gates = gates;
-      this.scene.add(gates);
+      mapGroup.add(gates);
+      this.mapModels[mapId].gates = gates;
     });
     
     // Load decorations
@@ -149,41 +205,37 @@ class LobbyBackground {
         }
       });
       
-      this.models.decorations = decorations;
-      this.scene.add(decorations);
+      mapGroup.add(decorations);
+      this.mapModels[mapId].decorations = decorations;
+      
+      // Mark this map as fully loaded
+      this.mapModels[mapId].loaded = true;
       
       // Force a couple of renders to update materials
-      setTimeout(() => {
-        for (let i = 0; i < 3; i++) {
-          this.renderer.render(this.scene, this.camera);
-        }
-      }, 100);
+      if (mapId === this.currentMap) {
+        setTimeout(() => {
+          for (let i = 0; i < 3; i++) {
+            this.renderer.render(this.scene, this.camera);
+          }
+        }, 100);
+      }
     });
   }
   
-  // Method to update the map
+  // Switch to a different map - instantly, since all maps are preloaded
   updateMap(mapId) {
-    if (this.currentMap === mapId) return; // Skip if same map
+    if (this.currentMap === mapId || !this.mapModels[mapId]) return;
     
+    // Hide current map
+    if (this.mapModels[this.currentMap]) {
+      this.mapModels[this.currentMap].group.visible = false;
+    }
+    
+    // Show selected map
+    this.mapModels[mapId].group.visible = true;
     this.currentMap = mapId;
-    this.loadModels(mapId);
-  }
-  
-  // Method to clear existing models
-  clearModels() {
-    // Remove existing models from scene
-    if (this.models.track) {
-      this.scene.remove(this.models.track);
-    }
-    if (this.models.gates) {
-      this.scene.remove(this.models.gates);
-    }
-    if (this.models.decorations) {
-      this.scene.remove(this.models.decorations);
-    }
     
-    // Reset models object
-    this.models = {};
+    console.log(`Switched to ${mapId}`);
   }
   
   onWindowResize() {
