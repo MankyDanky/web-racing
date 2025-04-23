@@ -15,7 +15,7 @@ const WHEEL_Z_OFFSET = 1.5;
 const SUSPENSION_STIFFNESS = 50;
 const SUSPENSION_DAMPING = 10;
 const SUSPENSION_COMPRESSION = 4.0;
-const ROLL_INFLUENCE = 0.0;
+const ROLL_INFLUENCE = 0.1;
 const WHEEL_FRICTION = 10;
 
 // Steering parameters
