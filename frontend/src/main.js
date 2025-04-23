@@ -53,6 +53,13 @@ let vehicle;
 let wheelMeshes = [];
 let carModel;
 
+// Car flip detection
+let carFlippedTime = 0;
+let carIsFlipped = false;
+let prevCarRotation = new THREE.Euler();
+let prevUpDot = 1.0; // Start assuming car is upright
+let upDotDelta = 0;
+
 // Control state
 const keyState = {
   w: false, s: false, a: false, d: false
@@ -1199,6 +1206,11 @@ function animate() {
           gateData.currentGateQuaternion
         );
       });
+
+      // Check if car is flipped
+      if (carModel && !raceState.raceFinished) {
+        checkCarFlipped(FIXED_PHYSICS_STEP);
+      }
       
       accumulator -= FIXED_PHYSICS_STEP;
       if (spectatorMode) {
@@ -1294,6 +1306,66 @@ function animate() {
   }
   
   renderer.render(scene, camera);
+}
+
+// Add this new function to check if the car is flipped and auto-reset if needed
+function checkCarFlipped(deltaTime) {
+  // Get the car's up direction (Y axis in local space)
+  const carUpVector = new THREE.Vector3(0, 1, 0);
+  carUpVector.applyQuaternion(carModel.quaternion);
+  
+  // World up vector
+  const worldUp = new THREE.Vector3(0, 1, 0);
+  
+  // Dot product between car's up and world up
+  // 1 = perfectly upright, 0 = on its side, -1 = upside down
+  const upDot = carUpVector.dot(worldUp);
+  
+  // Calculate change in dot product since last frame
+  upDotDelta = Math.abs(upDot - prevUpDot);
+  
+  // Store current dot product for next frame
+  prevUpDot = upDot;
+  
+  // Thresholds for flipped state
+  const FLIPPED_THRESHOLD = 0.5;   // How upright the car is (smaller value = more tilted)
+  const DOT_DELTA_THRESHOLD = 0.01; // How much the orientation is changing
+  
+  // Check if car is flipped or on its side AND not significantly changing orientation
+  if (upDot < FLIPPED_THRESHOLD && upDotDelta < DOT_DELTA_THRESHOLD) {
+    // If car wasn't previously flipped, start the timer
+    if (!carIsFlipped) {
+      carIsFlipped = true;
+      carFlippedTime = 0;
+    } else {
+      // Car was already flipped, increase timer
+      carFlippedTime += deltaTime;
+      
+      // If car has been flipped for more than 1 second, reset it
+      if (carFlippedTime > 1) {
+        console.log("Car was flipped for too long, auto-resetting");
+        console.log(`upDot: ${upDot.toFixed(3)}, upDotDelta: ${upDotDelta.toFixed(5)}`);
+        carIsFlipped = false;
+        carFlippedTime = 0;
+        
+        // Reset car to last checkpoint
+        if (window.Ammo && carBody && gateData) {
+          currentSteeringAngle = resetCarPosition(
+            window.Ammo, 
+            carBody, 
+            vehicle, 
+            currentSteeringAngle, 
+            gateData.currentGatePosition, 
+            gateData.currentGateQuaternion
+          );
+        }
+      }
+    }
+  } else {
+    // Car is not flipped or is actively changing orientation, reset the timer
+    carIsFlipped = false;
+    carFlippedTime = 0;
+  }
 }
 
 // Enhanced lighting system - add this function
