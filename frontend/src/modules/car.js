@@ -19,8 +19,8 @@ const ROLL_INFLUENCE = 0.0;
 const WHEEL_FRICTION = 10;
 
 // Steering parameters
-const MAX_STEERING_ANGLE = 0.25;
-const STEERING_SPEED = 2;
+const MAX_STEERING_ANGLE = 0.15;
+const STEERING_SPEED = 1.5;
 const STEERING_RETURN_SPEED = 2; 
 
 // Modify createVehicle to accept a callback for when the car is fully loaded
