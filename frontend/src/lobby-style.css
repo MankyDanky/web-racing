@@ -506,6 +506,7 @@ input::placeholder {
   width: 40px;
   height: 40px;
   border-radius: 50%;
+  font-size: 16px; 
   background-color: #ff0080;
   border: 2px solid #b30059;
   box-shadow: 0 3px 0 #b30059;
