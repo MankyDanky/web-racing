@@ -12,6 +12,7 @@
   <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.min.js"></script>
+  <script src="https://kit.fontawesome.com/1ab8f48e0a.js" crossorigin="anonymous"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
@@ -153,7 +154,41 @@
   </div>
 
   <!-- Personal website link button -->
-  <a href="https://aadikulshrestha.ca" target="_blank" class="website-link-btn" aria-label="Visit Aadi Kulshrestha's website"></a>
+  <a href="https://aadikulshrestha.ca" target="_blank" class="website-link-btn" aria-label="Visit Aadi Kulshrestha's website">
+    <i class="fas fa-external-link-alt"></i>
+  </a>
+
+  <!-- Info button -->
+  <button class="info-btn" id="info-btn" aria-label="Game information">
+    <i class="fas fa-info"></i>
+  </button>
+
+  <!-- Info popup -->
+  <div id="info-popup" class="info-popup hidden">
+    <div class="info-overlay"></div>
+    <div class="info-content">
+      <h2>RACEZ.IO - Game Info</h2>
+      
+      <div class="info-section">
+        <h3>About the Game</h3>
+        <p>RACEZ.IO is a multiplayer 3D racing game where you can race against friends across unique tracks. Create or join a party to play with others, or practice in a solo game.</p>
+      </div>
+      
+      <div class="info-section">
+        <h3>Controls</h3>
+        <ul>
+          <li><strong>W</strong> - Accelerate</li>
+          <li><strong>S</strong> - Brake/Reverse</li>
+          <li><strong>A</strong> - Steer Left</li>
+          <li><strong>D</strong> - Steer Right</li>
+          <li><strong>R</strong> - Reset Car (if stuck)</li>
+        </ul>
+      </div>
+      
+      <button id="close-info-btn" class="icon-btn">Close</button>
+    </div>
+  </div>
+
   <script type="module">
     import { inject } from 'https://esm.sh/@vercel/analytics';
     inject();

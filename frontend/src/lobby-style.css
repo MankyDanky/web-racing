@@ -479,6 +479,7 @@ input::placeholder {
   background-color: #ff0080;
   border: 2px solid #b30059;
   box-shadow: 0 3px 0 #b30059;
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -497,16 +498,110 @@ input::placeholder {
   box-shadow: 0 0 0 #b30059;
 }
 
-/* Create a link icon using ::before */
-.website-link-btn::before {
-  content: ""; 
+/* Info button styling (similar to website link button) */
+.info-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 70px; /* Position next to website link button */
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #ff0080;
+  border: 2px solid #b30059;
+  box-shadow: 0 3px 0 #b30059;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.2s ease;
+}
+
+.info-btn:hover {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b30059;
+}
+
+.info-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 #b30059;
+}
+
+/* Info popup styling */
+.info-popup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+.info-content {
+  position: relative;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background-color: #121212;
+  border: 3px solid #ff0080;
+  border-radius: 10px;
+  padding: 30px;
+  color: white;
+  z-index: 2001;
+}
+
+.info-content h2 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 900;
+  font-size: 2.2rem;
+  color: #ffffff;
+  text-align: center;
+  margin-bottom: 20px;
+  -webkit-text-stroke: 1px #000;
+  text-shadow: 0px 3px 0px rgb(0, 0, 0);
+}
+
+.info-section {
+  margin-bottom: 25px;
+}
+
+.info-section h3 {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: #ff0080;
+  margin-bottom: 10px;
+}
+
+.info-section p, .info-section li {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.info-section ul {
+  padding-left: 20px;
+  margin-bottom: 10px;
+}
+
+#close-info-btn {
   display: block;
-  width: 20px;
-  height: 20px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'%3E%3Cpath d='M10 6v2H5v11h11v-5h2v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6zm11-3v8h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8z'/%3E%3C/svg%3E");
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
+  margin: 20px auto 0;
 }
 
 /* Map Dropdown Styles */

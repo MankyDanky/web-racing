@@ -1179,4 +1179,35 @@ class RacingLobby {
   // Initialize the lobby when the page loads
   document.addEventListener('DOMContentLoaded', () => {
     const lobby = new RacingLobby();
+    
+    // Info popup functionality
+    const infoBtn = document.getElementById('info-btn');
+    const infoPopup = document.getElementById('info-popup');
+    const closeInfoBtn = document.getElementById('close-info-btn');
+    
+    if (infoBtn && infoPopup && closeInfoBtn) {
+      // Open popup when info button is clicked
+      infoBtn.addEventListener('click', () => {
+        infoPopup.classList.remove('hidden');
+      });
+      
+      // Close popup when close button is clicked
+      closeInfoBtn.addEventListener('click', () => {
+        infoPopup.classList.add('hidden');
+      });
+      
+      // Also close popup when clicking on the overlay
+      infoPopup.addEventListener('click', (event) => {
+        if (event.target === infoPopup || event.target.classList.contains('info-overlay')) {
+          infoPopup.classList.add('hidden');
+        }
+      });
+      
+      // Close popup with Escape key
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !infoPopup.classList.contains('hidden')) {
+          infoPopup.classList.add('hidden');
+        }
+      });
+    }
   });
