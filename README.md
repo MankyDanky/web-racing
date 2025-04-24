@@ -55,7 +55,7 @@ A real-time multiplayer 3D racing game built with JavaScript and modern web tech
 - **Joystick Down**: Brake/Reverse
 - **Joystick Left/Right**: Turn
 
-## 🧰 Technologies Used
+## Technologies Used
 
 - **Three.js**: 3D rendering engine
 - **Ammo.js**: Physics engine (WebAssembly port of Bullet Physics)
