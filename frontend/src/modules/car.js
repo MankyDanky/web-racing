@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { sanitizePlayerColor } from './sanitize.js';
+
+const VALID_PLAYER_COLORS_CAR = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
+function sanitizePlayerColor(color) {
+  return VALID_PLAYER_COLORS_CAR.includes(color) ? color : 'red';
+}
 
 // Vehicle parameters
 const VEHICLE_WIDTH = 2.0;

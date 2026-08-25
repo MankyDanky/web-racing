@@ -2,6 +2,25 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import Peer from 'peerjs';
 
+const VALID_PLAYER_COLORS_MP = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
+const FINISH_TIME_PATTERN_MP = /^\d{1,3}:[0-5]\d$/;
+function sanitizePlayerName(name, fallback = 'Player') {
+  if (typeof name !== 'string') return fallback;
+  const cleaned = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\ufeff]/g, '').trim();
+  if (!cleaned) return fallback;
+  return cleaned.slice(0, 15);
+}
+function sanitizePlayerColor(color) {
+  return VALID_PLAYER_COLORS_MP.includes(color) ? color : 'red';
+}
+function sanitizeFinishTime(value) {
+  if (typeof value !== 'string') return null;
+  return FINISH_TIME_PATTERN_MP.test(value) ? value : null;
+}
+function isFiniteNumber(value) {
+  return typeof value === 'number' && isFinite(value);
+}
+
 // Module state
 const state = {
   peer: null,
