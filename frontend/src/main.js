@@ -16,7 +16,22 @@ import {
 } from './modules/multiplayer.js';
 import { initPhysics, updatePhysics, FIXED_PHYSICS_STEP } from './modules/physics.js';
 import { createMinimap, extractTrackData, updateMinimapPlayers } from './modules/minimap.js';
-import { sanitizePlayerName, sanitizePlayerColor, sanitizeFinishTime } from './modules/sanitize.js';
+
+const VALID_PLAYER_COLORS_MAIN = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
+const FINISH_TIME_PATTERN_MAIN = /^\d{1,3}:[0-5]\d$/;
+function sanitizePlayerName(name, fallback = 'Player') {
+  if (typeof name !== 'string') return fallback;
+  const cleaned = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\ufeff]/g, '').trim();
+  if (!cleaned) return fallback;
+  return cleaned.slice(0, 15);
+}
+function sanitizePlayerColor(color) {
+  return VALID_PLAYER_COLORS_MAIN.includes(color) ? color : 'red';
+}
+function sanitizeFinishTime(value) {
+  if (typeof value !== 'string') return null;
+  return FINISH_TIME_PATTERN_MAIN.test(value) ? value : null;
+}
 
 // Check for game config from lobby
 let gameConfig = null;

@@ -1,11 +1,24 @@
-import {
-  sanitizePlayerName,
-  sanitizePlayerColor,
-  sanitizePeerId,
-  sanitizeTrackId
-} from './modules/sanitize.js';
-
 const MAX_PARTY_SIZE = 8;
+const VALID_PLAYER_COLORS_LOBBY = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
+const VALID_TRACK_IDS_LOBBY = ['map1', 'map2'];
+const PEER_ID_PATTERN_LOBBY = /^[A-Za-z0-9_-]{4,100}$/;
+const FINISH_TIME_PATTERN_LOBBY = /^\d{1,3}:[0-5]\d$/;
+function sanitizePlayerName(name, fallback = 'Player') {
+  if (typeof name !== 'string') return fallback;
+  const cleaned = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\ufeff]/g, '').trim();
+  if (!cleaned) return fallback;
+  return cleaned.slice(0, 15);
+}
+function sanitizePlayerColor(color) {
+  return VALID_PLAYER_COLORS_LOBBY.includes(color) ? color : 'red';
+}
+function sanitizeTrackId(trackId) {
+  return VALID_TRACK_IDS_LOBBY.includes(trackId) ? trackId : 'map1';
+}
+function sanitizePeerId(id) {
+  if (typeof id !== 'string') return null;
+  return PEER_ID_PATTERN_LOBBY.test(id) ? id : null;
+}
 const PARTY_CODE_PATTERN = /^[A-Z2-9]{6}$/;
 
 // Class to manage the lobby system
