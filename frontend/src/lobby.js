@@ -1,3 +1,13 @@
+import {
+  sanitizePlayerName,
+  sanitizePlayerColor,
+  sanitizePeerId,
+  sanitizeTrackId
+} from './modules/sanitize.js';
+
+const MAX_PARTY_SIZE = 8;
+const PARTY_CODE_PATTERN = /^[A-Z2-9]{6}$/;
+
 // Class to manage the lobby system
 class RacingLobby {
     constructor() {
@@ -110,16 +120,16 @@ class RacingLobby {
       // Join party button
       this.joinPartyBtn.addEventListener('click', () => {
         const code = this.joinCodeInput.value.trim().toUpperCase();
-        if (code) {
+        if (PARTY_CODE_PATTERN.test(code)) {
           this.joinParty(code);
         } else {
-          this.joinStatus.textContent = 'Please enter a party code';
+          this.joinStatus.textContent = 'Please enter a valid 6-character party code';
         }
       });
       
       // Player name input - update player name when changed
       this.playerNameInput.addEventListener('input', () => {
-        this.playerName = this.playerNameInput.value.trim() || `Player_${Math.floor(Math.random() * 10000)}`;
+        this.playerName = sanitizePlayerName(this.playerNameInput.value, '') || `Player_${Math.floor(Math.random() * 10000)}`;
         
         // Update name in player list if we're in a party
         if (this.players.length > 0) {
@@ -159,7 +169,7 @@ class RacingLobby {
       this.playBtn.addEventListener('click', () => {
         // If player has entered a name, use it
         if (this.playerNameInput.value.trim()) {
-          this.playerName = this.playerNameInput.value.trim();
+          this.playerName = sanitizePlayerName(this.playerNameInput.value);
         }
         
         if (this.isHost) {
@@ -461,14 +471,14 @@ class RacingLobby {
     }
     
     handleMessage(conn, data) {
+      if (!data || typeof data !== 'object') return;
+
       console.log('Received message:', data.type);
       
       // Update last heartbeat time for this connection
-      if (data.playerId) {
-        this.lastHeartbeat[data.playerId] = Date.now();
-      } else if (conn.peer) {
-        this.lastHeartbeat[conn.peer] = Date.now();
-      }
+      // (fall back to the authenticated peer ID of the connection itself)
+      const senderId = sanitizePeerId(data.playerId) || conn.peer;
+      this.lastHeartbeat[senderId] = Date.now();
       
       switch(data.type) {
         case 'heartbeat':
@@ -477,13 +487,22 @@ class RacingLobby {
           
         case 'joinRequest':
           if (this.isHost) {
+            const requestPeerId = sanitizePeerId(data.playerId);
+
+            // Reject requests whose claimed ID does not match the actual
+            // peer connection, or once the party is full
+            if (!requestPeerId || requestPeerId !== conn.peer || this.players.length >= MAX_PARTY_SIZE) {
+              console.warn('Rejected invalid join request from:', conn.peer);
+              break;
+            }
+
             // Add new player to the party
             const newPlayer = {
-              id: data.playerId,
-              name: data.playerName,
+              id: requestPeerId,
+              name: sanitizePlayerName(data.playerName),
               isHost: false,
               isReady: false, // Initialize as not ready
-              playerColor: data.playerColor || 'red'
+              playerColor: sanitizePlayerColor(data.playerColor)
             };
             
             // Initialize heartbeat timestamp for this player
@@ -508,8 +527,25 @@ class RacingLobby {
           break;
           
         case 'partyState':
-          // Update our local player list
-          this.players = data.players;
+          {
+            // Rebuild our local player list from the received roster,
+            // validating every field before it reaches the UI or gameConfig
+            const receivedPlayers = Array.isArray(data.players) ? data.players : [];
+            this.players = receivedPlayers
+              .map(player => {
+                if (!player || typeof player !== 'object') return null;
+                const playerId = sanitizePeerId(player.id);
+                if (!playerId) return null;
+                return {
+                  id: playerId,
+                  name: sanitizePlayerName(player.name),
+                  isHost: player.isHost === true,
+                  isReady: player.isReady === true,
+                  playerColor: sanitizePlayerColor(player.playerColor)
+                };
+              })
+              .filter(Boolean);
+          }
           this.updatePlayerList();
           
           // Check if client should update its own ready status
@@ -530,39 +566,78 @@ class RacingLobby {
           }
           
           // Add these lines to update the map when receiving party state
-          if (data.trackId && data.trackId !== this.selectedMap) {
-            this.selectedMap = data.trackId;
-            
-            // Update the UI to show the selected map
-            const partyStateDropdownOptions = document.querySelectorAll('.dropdown-option');
-            const partyStateSelectedMapName = document.querySelector('.selected-map-name');
-            
-            partyStateDropdownOptions.forEach(opt => {
-              const mapId = opt.getAttribute('data-map-id');
-              if (mapId === data.trackId) {
-                opt.classList.add('selected');
-                partyStateSelectedMapName.textContent = opt.textContent;
-              } else {
-                opt.classList.remove('selected');
-              }
-            });
-            
-            // Dispatch an event to update the background
-            document.dispatchEvent(new CustomEvent('mapChanged', {
-              detail: { mapId: data.trackId }
-            }));
+          if (data.trackId) {
+            const stateTrackId = sanitizeTrackId(data.trackId);
+
+            if (stateTrackId !== this.selectedMap) {
+              this.selectedMap = stateTrackId;
+
+              // Update the UI to show the selected map
+              const partyStateDropdownOptions = document.querySelectorAll('.dropdown-option');
+              const partyStateSelectedMapName = document.querySelector('.selected-map-name');
+
+              partyStateDropdownOptions.forEach(opt => {
+                const mapId = opt.getAttribute('data-map-id');
+                if (mapId === stateTrackId) {
+                  opt.classList.add('selected');
+                  partyStateSelectedMapName.textContent = opt.textContent;
+                } else {
+                  opt.classList.remove('selected');
+                }
+              });
+
+              // Dispatch an event to update the background
+              document.dispatchEvent(new CustomEvent('mapChanged', {
+                detail: { mapId: stateTrackId }
+              }));
+            }
           }
           break;
           
         case 'playerJoined':
-          // Add new player to our list
-          this.players.push(data.player);
+          {
+            // Validate the new player entry before adding it to our list
+            const joined = (data.player && typeof data.player === 'object') ? data.player : null;
+            const joinedId = joined ? sanitizePeerId(joined.id) : null;
+            if (!joinedId || this.players.some(p => p.id === joinedId)) break;
+
+            this.players.push({
+              id: joinedId,
+              name: sanitizePlayerName(joined.name),
+              isHost: joined.isHost === true,
+              isReady: joined.isReady === true,
+              playerColor: sanitizePlayerColor(joined.playerColor)
+            });
+          }
           this.updatePlayerList();
           break;
           
         case 'startGame':
-          // Host has started the game - save config and navigate to game
-          sessionStorage.setItem('gameConfig', JSON.stringify(data));
+          {
+            // Host has started the game - sanitize the config before saving
+            // it, since it will drive UI rendering on the game page
+            const players = (Array.isArray(data.players) ? data.players : [])
+              .map(player => {
+                if (!player || typeof player !== 'object') return null;
+                const playerId = sanitizePeerId(player.id);
+                if (!playerId) return null;
+                return {
+                  id: playerId,
+                  name: sanitizePlayerName(player.name),
+                  isHost: player.isHost === true,
+                  isReady: player.isReady === true,
+                  playerColor: sanitizePlayerColor(player.playerColor)
+                };
+              })
+              .filter(Boolean);
+
+            sessionStorage.setItem('gameConfig', JSON.stringify({
+              type: 'startGame',
+              trackId: sanitizeTrackId(data.trackId),
+              players: players,
+              multiplayer: data.multiplayer === true
+            }));
+          }
           window.location.href = 'game.html';
           break;
           
@@ -576,12 +651,17 @@ class RacingLobby {
 
         case 'playerUpdate':
           if (this.isHost) {
+            // Guests may only update their own player entry - reject
+            // attempts to spoof another player's ID
+            const updatePeerId = sanitizePeerId(data.playerId);
+            if (!updatePeerId || updatePeerId !== conn.peer) break;
+
             // Find the player in the list
-            const playerIndex = this.players.findIndex(p => p.id === data.playerId);
+            const playerIndex = this.players.findIndex(p => p.id === updatePeerId);
             if (playerIndex !== -1) {
               // Update player info
-              this.players[playerIndex].name = data.playerName;
-              this.players[playerIndex].playerColor = data.playerColor;
+              this.players[playerIndex].name = sanitizePlayerName(data.playerName);
+              this.players[playerIndex].playerColor = sanitizePlayerColor(data.playerColor);
               
               // Also update ready status if provided in the message
               if (typeof data.isReady !== 'undefined') {
@@ -617,27 +697,30 @@ class RacingLobby {
           break;
 
         case 'mapUpdate':
-          // Update our selected map
-          this.selectedMap = data.trackId;
-          
-          // Update the UI to show the selected map
-          const dropdownOptions = document.querySelectorAll('.dropdown-option');
-          const selectedMapName = document.querySelector('.selected-map-name');
-          
-          dropdownOptions.forEach(opt => {
-            const mapId = opt.getAttribute('data-map-id');
-            if (mapId === data.trackId) {
-              opt.classList.add('selected');
-              selectedMapName.textContent = opt.textContent;
-            } else {
-              opt.classList.remove('selected');
-            }
-          });
-          
-          // Dispatch an event to update the background
-          document.dispatchEvent(new CustomEvent('mapChanged', {
-            detail: { mapId: data.trackId }
-          }));
+          {
+            // Update our selected map (whitelisted - it is used in model URLs)
+            const mapUpdateTrackId = sanitizeTrackId(data.trackId);
+            this.selectedMap = mapUpdateTrackId;
+
+            // Update the UI to show the selected map
+            const dropdownOptions = document.querySelectorAll('.dropdown-option');
+            const selectedMapName = document.querySelector('.selected-map-name');
+
+            dropdownOptions.forEach(opt => {
+              const mapId = opt.getAttribute('data-map-id');
+              if (mapId === mapUpdateTrackId) {
+                opt.classList.add('selected');
+                selectedMapName.textContent = opt.textContent;
+              } else {
+                opt.classList.remove('selected');
+              }
+            });
+
+            // Dispatch an event to update the background
+            document.dispatchEvent(new CustomEvent('mapChanged', {
+              detail: { mapId: mapUpdateTrackId }
+            }));
+          }
           break;
 
         case 'playerReady':

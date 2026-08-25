@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { sanitizePlayerColor } from './sanitize.js';
 
 // Vehicle parameters
 const VEHICLE_WIDTH = 2.0;
@@ -159,10 +160,13 @@ function loadCarModel(ammo, scene, carComponents, wheelPositions, onModelLoaded)
       carColor = storedColor;
       console.log(`Using car color from sessionStorage: ${carColor}`);
     } else {
-      console.log('Using default red color');
+      console.log(`Using default red color`);
     }
   }
-  
+
+  // The color is used in a model URL below - restrict it to the palette
+  carColor = sanitizePlayerColor(carColor);
+
   // Load the appropriate colored car model
   loader.load(
     `/models/car_${carColor}.glb`,

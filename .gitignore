@@ -24,3 +24,10 @@ frontend/coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# Python / Django
+__pycache__/
+*.py[cod]
+backend/venv/
+backend/db.sqlite3
+backend/staticfiles/

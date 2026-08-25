@@ -1,5 +1,5 @@
 from django.db import models
-import random
+import secrets
 import string
 from datetime import timedelta
 from django.utils import timezone
@@ -22,12 +22,15 @@ class PartyCode(models.Model):
         # Exclude similar-looking characters (I, O, 0, 1, etc.)
         characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
         
-        # Try up to 10 times to generate a unique code
+        # Try up to 10 times to generate a unique code.
+        # secrets.choice is used because these codes act as capability
+        # tokens - a predictable PRNG would let attackers guess them.
         for _ in range(10):
-            code = ''.join(random.choice(characters) for _ in range(6))
+            code = ''.join(secrets.choice(characters) for _ in range(6))
             if not cls.objects.filter(code=code).exists():
                 return code
         
         # If we couldn't generate a unique code after 10 attempts,
         # add more characters
-        return ''.join(random.choice(characters) for _ in range(8))
+        return ''.join(secrets.choice(characters) for _ in range(8))
+

@@ -16,6 +16,7 @@ import {
 } from './modules/multiplayer.js';
 import { initPhysics, updatePhysics, FIXED_PHYSICS_STEP } from './modules/physics.js';
 import { createMinimap, extractTrackData, updateMinimapPlayers } from './modules/minimap.js';
+import { sanitizePlayerName, sanitizePlayerColor, sanitizeFinishTime } from './modules/sanitize.js';
 
 // Check for game config from lobby
 let gameConfig = null;
@@ -34,8 +35,12 @@ try {
     console.log('Game config loaded:', gameConfig);
     console.log('Playing as host:', isHost);
     
-    // Store player list
-    allPlayers = gameConfig.players;
+    // Store player list (sanitized - it may have crossed peer connections)
+    allPlayers = gameConfig.players.map(player => ({
+      ...player,
+      name: sanitizePlayerName(player.name),
+      playerColor: sanitizePlayerColor(player.playerColor)
+    }));
   }
 } catch (e) {
   console.error('Error loading game config:', e);
@@ -333,8 +338,8 @@ function updateLeaderboard() {
         
         playerPositions.push({
           id: playerId,
-          name: opponent.name || 'Player',
-          color: opponent.color || 'red',
+          name: sanitizePlayerName(opponent.name),
+          color: sanitizePlayerColor(opponent.color),
           gateIndex: gateIndex,
           distanceToNextGate: distanceToNextGate
         });
@@ -361,26 +366,40 @@ function updateLeaderboard() {
     }
   });
   
-  // Generate HTML for leaderboard
-  let leaderboardHTML = '';
+  // Build the leaderboard with DOM APIs (player names are peer-controlled,
+  // so they must never be interpolated into innerHTML)
+  leaderboardPositions.replaceChildren();
   playerPositions.forEach((player, index) => {
     // In single player mode, always show as position 1
     const position = raceState.isMultiplayer ? (index + 1) : 1;
     const positionLabel = getPositionLabel(position);
     const isCurrentPlayer = player.id === myPlayerId;
-    
-    leaderboardHTML += `
-      <div style="display: flex; align-items: center; margin-bottom: 8px; 
-          ${isCurrentPlayer ? 'font-weight: bold; text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);' : ''}">
-        <span style="color: ${getPositionColor(position)}; min-width: 30px;">${positionLabel}</span>
-        <span style="${isCurrentPlayer ? 'text-decoration: underline;' : ''}; margin-left: 10px;">
-          ${player.name}
-        </span>
-      </div>
-    `;
+
+    const entry = document.createElement('div');
+    entry.style.display = 'flex';
+    entry.style.alignItems = 'center';
+    entry.style.marginBottom = '8px';
+    if (isCurrentPlayer) {
+      entry.style.fontWeight = 'bold';
+      entry.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.8)';
+    }
+
+    const positionSpan = document.createElement('span');
+    positionSpan.textContent = positionLabel;
+    positionSpan.style.color = getPositionColor(position);
+    positionSpan.style.minWidth = '30px';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = sanitizePlayerName(player.name);
+    nameSpan.style.marginLeft = '10px';
+    if (isCurrentPlayer) {
+      nameSpan.style.textDecoration = 'underline';
+    }
+
+    entry.appendChild(positionSpan);
+    entry.appendChild(nameSpan);
+    leaderboardPositions.appendChild(entry);
   });
-  
-  leaderboardPositions.innerHTML = leaderboardHTML;
 }
 
 // Helper function to get position label
@@ -448,21 +467,34 @@ function updateWaitingUI() {
   const playerListEl = waitingForPlayersOverlay.querySelector('#player-list');
   if (!playerListEl) return;
   
-  let playerListHTML = '';
+  // Build the list with DOM APIs (names/colors are peer-controlled)
+  playerListEl.replaceChildren();
   allPlayers.forEach(player => {
-    // Check if this player is connected 
-    const isConnected = multiplayerState.playerConnections.some(conn => conn.peer === player.id) || 
+    // Check if this player is connected
+    const isConnected = multiplayerState.playerConnections.some(conn => conn.peer === player.id) ||
                         player.id === localStorage.getItem('myPlayerId');
-    
-    // Updated dot colors to match the white theme
-    const connectionStatus = isConnected ? 
-      '<span style="color:#90ff90; text-shadow: 0 0 5px rgba(144, 255, 144, 0.7);">● Connected</span>' : 
-      '<span style="color:#ff9090; text-shadow: 0 0 5px rgba(255, 144, 144, 0.7);">○ Waiting...</span>';
-    
-    playerListHTML += `<div style="margin-bottom: 8px;">${player.name} (${player.playerColor}) - ${connectionStatus}</div>`;
+
+    const row = document.createElement('div');
+    row.style.marginBottom = '8px';
+
+    const label = document.createElement('span');
+    label.textContent = `${sanitizePlayerName(player.name)} (${sanitizePlayerColor(player.playerColor)}) - `;
+
+    const connectionStatus = document.createElement('span');
+    if (isConnected) {
+      connectionStatus.textContent = '● Connected';
+      connectionStatus.style.color = '#90ff90';
+      connectionStatus.style.textShadow = '0 0 5px rgba(144, 255, 144, 0.7)';
+    } else {
+      connectionStatus.textContent = '○ Waiting...';
+      connectionStatus.style.color = '#ff9090';
+      connectionStatus.style.textShadow = '0 0 5px rgba(255, 144, 144, 0.7)';
+    }
+
+    row.appendChild(label);
+    row.appendChild(connectionStatus);
+    playerListEl.appendChild(row);
   });
-  
-  playerListEl.innerHTML = playerListHTML;
 }
 
 // Improve the startCountdown function with better logging and state handling
@@ -760,26 +792,56 @@ function showFinalLeaderboard() {
   // Add player rows for top 3 only
   topPlayers.forEach((player, index) => {
     const row = document.createElement('tr');
-    
+
     // Determine position indicator and style
     const position = index + 1;
     const positionLabel = getPositionLabel(position);
     const positionColor = getPositionColor(position);
-    
-    // Get finish time
-    const finishTime = playerFinishTimes[player.id] || player.finishTime || "00:00";
-    
-    row.innerHTML = `
-      <td style="padding: 12px; text-align: center; color: ${positionColor}; font-weight: bold;">${positionLabel}</td>
-      <td style="padding: 12px; text-align: left;">
-        <div style="display: flex; align-items: center;">
-          <div style="width: 15px; height: 15px; background-color: ${getPlayerColorHex(player.color)}; margin-right: 10px; border-radius: 50%;"></div>
-          ${player.name}
-        </div>
-      </td>
-      <td style="padding: 12px; text-align: right; font-weight: bold; color: #ffffff;">${finishTime}</td>
-    `;
-    
+
+    // Get finish time (peer-controlled values must be validated before display)
+    const rawFinishTime = playerFinishTimes[player.id] || player.finishTime || "00:00";
+    const finishTime = sanitizeFinishTime(rawFinishTime) || "00:00";
+
+    const positionCell = document.createElement('td');
+    positionCell.textContent = positionLabel;
+    positionCell.style.padding = '12px';
+    positionCell.style.textAlign = 'center';
+    positionCell.style.color = positionColor;
+    positionCell.style.fontWeight = 'bold';
+
+    const nameCell = document.createElement('td');
+    nameCell.style.padding = '12px';
+    nameCell.style.textAlign = 'left';
+
+    const nameWrapper = document.createElement('div');
+    nameWrapper.style.display = 'flex';
+    nameWrapper.style.alignItems = 'center';
+
+    const colorDot = document.createElement('div');
+    colorDot.style.width = '15px';
+    colorDot.style.height = '15px';
+    colorDot.style.backgroundColor = getPlayerColorHex(player.color);
+    colorDot.style.marginRight = '10px';
+    colorDot.style.borderRadius = '50%';
+
+    const nameText = document.createElement('span');
+    nameText.textContent = sanitizePlayerName(player.name);
+
+    nameWrapper.appendChild(colorDot);
+    nameWrapper.appendChild(nameText);
+    nameCell.appendChild(nameWrapper);
+
+    const timeCell = document.createElement('td');
+    timeCell.textContent = finishTime;
+    timeCell.style.padding = '12px';
+    timeCell.style.textAlign = 'right';
+    timeCell.style.fontWeight = 'bold';
+    timeCell.style.color = '#ffffff';
+
+    row.appendChild(positionCell);
+    row.appendChild(nameCell);
+    row.appendChild(timeCell);
+
     table.appendChild(row);
   });
   

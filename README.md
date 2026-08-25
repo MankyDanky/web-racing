@@ -63,3 +63,23 @@ A real-time multiplayer 3D racing game built with JavaScript and modern web tech
 - **JavaScript**: Core programming language
 - **HTML5/CSS3**: Frontend structure and styling
 - **Python/Django**: Backend server for matchmaking and party code management
+
+## ⚙️ Backend Setup
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+Required environment variables (the server will refuse to start without them):
+
+| Variable | Description |
+|---|---|
+| `SECRET_KEY` | Django secret key. Generate with `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` |
+| `DEBUG` | Set to `True` only for local development |
+| `ALLOWED_HOSTS` | Comma-separated list of allowed hostnames |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated list of frontend origins |
+
+The SQLite database (`db.sqlite3`) and the virtualenv are not tracked in git - they are created locally / by `build.sh`.
