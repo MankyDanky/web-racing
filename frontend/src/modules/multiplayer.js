@@ -31,8 +31,12 @@ export function initMultiplayer(gameState) {
       console.log('Game config loaded:', state.gameConfig);
       console.log('Playing as host:', state.isHost);
       
-      // Store player list
-      state.allPlayers = state.gameConfig.players;
+      // Store player list (sanitized - it may contain data from other peers)
+      state.allPlayers = state.gameConfig.players.map(player => ({
+        ...player,
+        name: sanitizePlayerName(player.name),
+        playerColor: sanitizePlayerColor(player.playerColor)
+      }));
     }
   } catch (e) {
     console.error('Error loading game config:', e);
@@ -266,12 +270,13 @@ function loadOpponentCarModel(playerId, scene) {
   if (state.gameConfig && state.gameConfig.players) {
     const playerInfo = state.gameConfig.players.find(p => p.id === playerId);
     if (playerInfo) {
-      playerName = playerInfo.name || 'Player';
-      playerColor = playerInfo.playerColor || 'red';
+      playerName = sanitizePlayerName(playerInfo.name);
+      playerColor = sanitizePlayerColor(playerInfo.playerColor);
     }
   }
   
-  // Load the appropriate colored car model
+  // Load the appropriate colored car model (color is whitelisted, so the
+  // URL below can't be manipulated via path traversal)
   loader.load(
     `/models/car_${playerColor}.glb`,
     (gltf) => {
@@ -404,6 +409,8 @@ function createTextSprite(text) {
 }
 
 // Update a specific opponent's car position
+// Everything in `data` comes from a remote peer and must be treated as
+// untrusted: validated for type/range and sanitized before use.
 export function updateOpponentCarPosition(playerId, data) {
   // Just look up by the original ID
   let opponent = state.opponentCars[playerId];
@@ -413,50 +420,67 @@ export function updateOpponentCarPosition(playerId, data) {
     return;
   }
   
+  if (!data || typeof data !== 'object') return;
+
   // Update last seen timestamp
   opponent.lastUpdate = Date.now();
   
   // Make visible
   opponent.model.visible = true;
   
-  // Update position and rotation
+  const position = typeof data.position === 'object' && data.position !== null ? data.position : {};
+  const quaternion = typeof data.quaternion === 'object' && data.quaternion !== null ? data.quaternion : {};
+  
+  // Update position and rotation, falling back to safe defaults when a
+  // peer sends NaN/strings/huge values that would corrupt Three.js state
   opponent.model.position.set(
-    data.position.x, 
-    data.position.y, 
-    data.position.z
+    isFiniteNumber(position.x) ? position.x : 0, 
+    isFiniteNumber(position.y) ? position.y : 0, 
+    isFiniteNumber(position.z) ? position.z : 0
   );
   
   opponent.model.quaternion.set(
-    data.quaternion.x,
-    data.quaternion.y,
-    data.quaternion.z,
-    data.quaternion.w
+    isFiniteNumber(quaternion.x) ? quaternion.x : 0,
+    isFiniteNumber(quaternion.y) ? quaternion.y : 0,
+    isFiniteNumber(quaternion.z) ? quaternion.z : 0,
+    isFiniteNumber(quaternion.w) ? quaternion.w : 1
   );
   
   // Store race progress data with detailed logging
-  if (data.raceProgress) {
+  if (data.raceProgress && typeof data.raceProgress === 'object') {
     // Create a fresh race progress object with explicit property assignments
     if (!opponent.raceProgress) {
       opponent.raceProgress = {};
     }
-    
-    opponent.raceProgress.currentGateIndex = Number(data.raceProgress.currentGateIndex);
-    opponent.raceProgress.distanceToNextGate = Number(data.raceProgress.distanceToNextGate);
+
+    const gateIndex = Number(data.raceProgress.currentGateIndex);
+    opponent.raceProgress.currentGateIndex =
+      Number.isFinite(gateIndex) && gateIndex >= 0 ? Math.floor(gateIndex) : 0;
+
+    const distanceToNextGate = Number(data.raceProgress.distanceToNextGate);
+    opponent.raceProgress.distanceToNextGate =
+      Number.isFinite(distanceToNextGate) && distanceToNextGate >= 0
+        ? Math.min(distanceToNextGate, 1e6)
+        : 1000000;
     
     if (data.playerName) {
-      opponent.name = data.playerName;
+      opponent.name = sanitizePlayerName(data.playerName);
     }
     if (data.playerColor) {
-      opponent.color = data.playerColor;
+      opponent.color = sanitizePlayerColor(data.playerColor);
     }
   }
   
   // Check if this player has just finished the race
   if (data.finishTime && window.playerFinishTimes) {
-    console.log(`Received finish time for ${data.playerName || playerId}: ${data.finishTime}`);
+    // Only accept well-formed MM:SS times from peers
+    const finishTime = sanitizeFinishTime(data.finishTime);
+    if (!finishTime) return;
+
+    console.log(`Received finish time for ${opponent.name || playerId}: ${finishTime}`);
     
     // Store the finish time in our permanent tracker
-    window.playerFinishTimes[playerId] = data.finishTime;
+    window.playerFinishTimes[playerId] = finishTime;
     
     // Also update this opponent as having finished the race
     opponent.raceFinished = true;
@@ -497,15 +521,16 @@ export function sendCarData(gameState) {
   // Get the current player ID
   const myPlayerId = localStorage.getItem('myPlayerId');
   
-  // Get player name and color from game config
+  // Get player name and color from game config (already sanitized at load,
+  // but re-sanitize defensively before use)
   let playerName = 'Player';
   let playerColor = 'red';
   
   if (state.gameConfig && state.gameConfig.players) {
     const playerInfo = state.gameConfig.players.find(p => p.id === myPlayerId);
     if (playerInfo) {
-      playerName = playerInfo.name || 'Player';
-      playerColor = playerInfo.playerColor || 'red';
+      playerName = sanitizePlayerName(playerInfo.name);
+      playerColor = sanitizePlayerColor(playerInfo.playerColor);
     }
   }
   
