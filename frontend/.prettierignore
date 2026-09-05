@@ -1,0 +1,4 @@
+dist/
+node_modules/
+src/lib/ammo.js
+public/

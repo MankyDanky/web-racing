@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Racez.io</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js" integrity="sha384-QfGw0R4npwfR5dPhK7V7G0NNR+eDrkBOqtXT22mGx56CokD6Gx18KyAQMtDQbQne" crossorigin="anonymous"></script>
     <script src="https://kit.fontawesome.com/1ab8f48e0a.js" crossorigin="anonymous"></script>
@@ -13,11 +13,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Funnel+Sans:ital,wght@0,300..800;1,300..800&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
   </head>
   <body>
-    <!-- Rotate Message -->
-    <div id="rotate-message">
+    <!-- Rotate Message (tap to auto-rotate into landscape + fullscreen) -->
+    <div id="rotate-message" role="button" tabindex="0" aria-label="Tap to rotate to landscape">
       <div class="rotate-content">
         <i class="fas fa-sync-alt rotate-icon"></i>
-        <p>Please Rotate to Landscape</p>
+        <p>Rotate to Landscape</p>
+        <button id="rotate-tap-btn" type="button">
+          <i class="fas fa-mobile-screen-button"></i> Tap to rotate
+        </button>
+        <span class="rotate-hint">or turn your phone sideways</span>
       </div>
     </div>
 
@@ -53,9 +57,12 @@
     <a href="index.html" class="exit-game-btn" aria-label="Return to lobby">
       <i class="fas fa-door-open"></i>
     </a>
-    <script type="module">
-      import { inject } from 'https://esm.sh/@vercel/analytics';
-      inject();
-    </script>
+    <!--
+      Analytics / privacy (#50): third-party analytics no longer load
+      unconditionally. They are only injected after the player has given
+      consent (stored in localStorage), satisfying GDPR consent requirements.
+      The consent banner + privacy note live in src/modules/consent.js.
+    -->
+    <script type="module" src="/src/modules/consent.js"></script>
   </body>
 </html>

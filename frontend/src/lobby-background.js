@@ -73,7 +73,7 @@ class LobbyBackground {
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.physicallyCorrectLights = true;
-    this.renderer.outputEncoding = THREE.sRGBEncoding;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
@@ -224,18 +224,20 @@ class LobbyBackground {
   
   // Switch to a different map - instantly, since all maps are preloaded
   updateMap(mapId) {
-    if (this.currentMap === mapId || !this.mapModels[mapId]) return;
-    
+    // Reverse variants (#43) share their base map's assets for the preview.
+    const assetMap = mapId.replace(/-reverse$/, '');
+    if (this.currentMap === assetMap || !this.mapModels[assetMap]) return;
+
     // Hide current map
     if (this.mapModels[this.currentMap]) {
       this.mapModels[this.currentMap].group.visible = false;
     }
-    
+
     // Show selected map
-    this.mapModels[mapId].group.visible = true;
-    this.currentMap = mapId;
-    
-    console.log(`Switched to ${mapId}`);
+    this.mapModels[assetMap].group.visible = true;
+    this.currentMap = assetMap;
+
+    console.log(`Switched to ${assetMap}`);
   }
   
   onWindowResize() {

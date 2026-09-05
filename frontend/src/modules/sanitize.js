@@ -8,8 +8,9 @@ export const VALID_PLAYER_COLORS = [
 ];
 
 // Only these tracks ship with the game; anything else would end up as a
-// path-traversal payload inside /models/maps/${trackId}/... URLs.
-export const VALID_TRACK_IDS = ['map1', 'map2'];
+// path-traversal payload inside /models/maps/${trackId}/... URLs. Reverse
+// variants reuse a base map's assets (#43) but are still explicitly listed.
+export const VALID_TRACK_IDS = ['map1', 'map2', 'map1-reverse', 'map2-reverse'];
 
 // PeerJS IDs are alphanumeric with dashes/underscores.
 const PEER_ID_PATTERN = /^[A-Za-z0-9_-]{4,100}$/;

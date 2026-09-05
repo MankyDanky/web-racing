@@ -39,10 +39,14 @@
   </script>
 </head>
 <body>
-  <div id="rotate-message">
+  <div id="rotate-message" role="button" tabindex="0" aria-label="Tap to rotate to landscape">
     <div class="rotate-content">
       <i class="fas fa-sync-alt rotate-icon"></i>
-      <p>Please Rotate to Landscape</p>
+      <p>Rotate to Landscape</p>
+      <button id="rotate-tap-btn" type="button">
+        <i class="fas fa-mobile-screen-button"></i> Tap to rotate
+      </button>
+      <span class="rotate-hint">or turn your phone sideways</span>
     </div>
   </div>
 
@@ -100,6 +104,8 @@
               <div class="dropdown-content">
                 <div class="dropdown-option selected" data-map-id="map1">Forest Freeway</div>
                 <div class="dropdown-option" data-map-id="map2">Snowy Speedway</div>
+                <div class="dropdown-option" data-map-id="map1-reverse">Forest Freeway (Reverse)</div>
+                <div class="dropdown-option" data-map-id="map2-reverse">Snowy Speedway (Reverse)</div>
               </div>
             </div>
           </div>
@@ -196,9 +202,7 @@
     </div>
   </div>
 
-  <script type="module">
-    import { inject } from 'https://esm.sh/@vercel/analytics';
-    inject();
-  </script>
+  <!-- Consent-gated analytics + privacy note (#50) -->
+  <script type="module" src="/src/modules/consent.js"></script>
 </body>
 </html>

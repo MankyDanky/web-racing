@@ -36,9 +36,38 @@ if not SECRET_KEY:
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 # For ALLOWED_HOSTS
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",")
-if ALLOWED_HOSTS and ALLOWED_HOSTS[0] == "*":
+# Parse the comma-separated env var, dropping empty entries (an unset var would
+# otherwise yield [''] which blocks every request).
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+# Render (and most PaaS) expose the public hostname via an env var. Auto-add it
+# so a one-click deploy works without hand-editing ALLOWED_HOSTS (#7, #8).
+_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
+
+if ALLOWED_HOSTS == ["*"]:
     ALLOWED_HOSTS = ["*"]  # Allow any host
+elif not ALLOWED_HOSTS and DEBUG:
+    # Local development: allow localhost AND this machine's LAN addresses so that
+    # other devices on the same Wi-Fi/router can reach the API by IP. We add the
+    # detected private IPs explicitly and, to keep LAN play friction-free, allow
+    # any host while DEBUG is on. Production (DEBUG=False) MUST set ALLOWED_HOSTS.
+    import socket
+
+    _lan_hosts = ["localhost", "127.0.0.1", "[::1]", "0.0.0.0"]
+    try:
+        _hostname = socket.gethostname()
+        _lan_hosts.append(_hostname)
+        for _info in socket.getaddrinfo(_hostname, None):
+            _ip = _info[4][0]
+            if _ip not in _lan_hosts:
+                _lan_hosts.append(_ip)
+    except Exception:
+        pass
+    # In DEBUG, accept any Host header so `http://<your-lan-ip>:8000` works from
+    # phones/other PCs without listing every address. This is dev-only.
+    ALLOWED_HOSTS = _lan_hosts + ["*"]
 
 
 # Application definition
@@ -138,20 +167,87 @@ STATIC_URL = '/static/'
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# --- Single-service SPA hosting (#7) --------------------------------------
+# When the built frontend (frontend/dist) is present, Django serves it directly
+# via WhiteNoise so the whole game runs from ONE process on ONE port — no
+# separate static host or PeerJS broker needed (public PeerJS cloud is used for
+# signalling). This is what makes the Render free tier "just work".
+#
+# FRONTEND_DIST can be overridden; by default we look for ../frontend/dist
+# relative to the backend, and also a bundled ./frontend_dist copy (used by the
+# `site/` mirror and some deploys where the build is colocated).
+_candidate_dists = [
+    os.environ.get("FRONTEND_DIST", ""),
+    os.path.join(BASE_DIR, "frontend_dist"),
+    os.path.join(BASE_DIR.parent, "frontend", "dist"),
+]
+FRONTEND_DIST = next((p for p in _candidate_dists if p and os.path.isdir(p)), "")
+
+if FRONTEND_DIST:
+    # Serve the built SPA's hashed assets (JS/CSS/models) through WhiteNoise.
+    WHITENOISE_ROOT = FRONTEND_DIST
+    # Don't 404-and-index for SPA routes here; the catch-all view handles HTML.
+    WHITENOISE_INDEX_FILE = True
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Configure CORS to allow requests from your frontend
-if os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true":
+# --- CORS (#39) -----------------------------------------------------------
+# The CORS_ALLOW_ALL_ORIGINS escape hatch must NOT be combined with
+# CORS_ALLOW_CREDENTIALS=True: browsers reject that combination and it would be
+# a security foot-gun (any origin + credentials). We refuse to activate it.
+CORS_ALLOW_CREDENTIALS = os.environ.get("CORS_ALLOW_CREDENTIALS", "True").lower() == "true"
+
+_cors_allow_all = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
+if _cors_allow_all and CORS_ALLOW_CREDENTIALS:
+    raise ImproperlyConfigured(
+        "CORS_ALLOW_ALL_ORIGINS cannot be combined with CORS_ALLOW_CREDENTIALS=True. "
+        "Set CORS_ALLOW_CREDENTIALS=False or list explicit CORS_ALLOWED_ORIGINS."
+    )
+
+if _cors_allow_all:
     CORS_ALLOW_ALL_ORIGINS = True
 else:
     CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
-    # Filter empty strings
-    CORS_ALLOWED_ORIGINS = [origin for origin in CORS_ALLOWED_ORIGINS if origin]
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS if origin.strip()]
+    if not CORS_ALLOWED_ORIGINS and DEBUG:
+        # Let the Vite dev server (default :5173) call the API in local dev.
+        CORS_ALLOWED_ORIGINS = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ]
+        # ...and allow the dev server when opened from any private-LAN IP, so
+        # other devices on the network can play. Matches http://10.x, 172.16-31.x
+        # and 192.168.x on any port. Dev-only; ignored when DEBUG=False.
+        CORS_ALLOWED_ORIGIN_REGEXES = [
+            r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+            r"^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$",
+            r"^http://172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$",
+            r"^http://192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$",
+        ]
 
-CORS_ALLOW_CREDENTIALS = True
+# --- Cache / throttle backend (#36) --------------------------------------
+# DRF's default throttle uses the local-memory cache, which is per-process. Under
+# multi-worker gunicorn that multiplies the real rate by the worker count. Point
+# it at Redis when REDIS_URL is provided so throttles are shared across workers.
+REDIS_URL = os.environ.get("REDIS_URL")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
+    }
+else:
+    # Local-memory fallback for single-process dev.
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "party-codes",
+        }
+    }
 
 # Add REST Framework default settings
 REST_FRAMEWORK = {
@@ -170,3 +266,42 @@ REST_FRAMEWORK = {
         "party_lookup": "30/min",
     },
 }
+
+# --- Production hardening headers (#39) ------------------------------------
+# Only enforce HTTPS-related settings when not in DEBUG, so local dev over http
+# still works.
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() == "true"
+    # Behind a proxy/load-balancer (Render, Railway) trust the forwarded proto.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = "DENY"
+
+# --- CSRF trusted origins (#7) --------------------------------------------
+# For admin login / any POST over HTTPS behind a proxy, Django needs the origin
+# in CSRF_TRUSTED_ORIGINS. Seed it from the Render hostname and any explicit
+# env value (comma-separated, scheme required, e.g. https://example.com).
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
+if _render_host:
+    _render_origin = f"https://{_render_host}"
+    if _render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_render_origin)
+
+# --- Admin path (#38) -----------------------------------------------------
+# Move the Django admin off the well-known /admin/ path on a public API box.
+# Override with the ADMIN_URL env var (e.g. "secret-console/").
+ADMIN_URL = os.environ.get("ADMIN_URL", "admin/")
+# Optional IP allowlist for the admin, enforced by middleware below.
+ADMIN_IP_ALLOWLIST = [
+    ip.strip() for ip in os.environ.get("ADMIN_IP_ALLOWLIST", "").split(",") if ip.strip()
+]
+if ADMIN_IP_ALLOWLIST:
+    # Insert our lightweight allowlist middleware right after security.
+    MIDDLEWARE.insert(1, "party_codes.middleware.AdminIPAllowlistMiddleware")

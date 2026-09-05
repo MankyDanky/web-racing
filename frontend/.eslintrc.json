@@ -1,0 +1,30 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "extends": "eslint:recommended",
+  "globals": {
+    "Ammo": "readonly",
+    "THREE": "readonly",
+    "Peer": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-empty": ["warn", { "allowEmptyCatch": true }],
+    "no-console": "off"
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "src/lib/ammo.js"],
+  "overrides": [
+    {
+      "files": ["src/modules/sanitize.js"],
+      "rules": { "no-control-regex": "off" }
+    }
+  ]
+}

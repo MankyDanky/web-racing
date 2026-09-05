@@ -325,6 +325,43 @@ html, body {
   margin: 0;
 }
 
+#rotate-tap-btn {
+  margin-top: 26px;
+  padding: 14px 30px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: #fff;
+  background: linear-gradient(135deg, #ff0080, #b30059);
+  border: none;
+  border-radius: 40px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(255, 0, 128, 0.45);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  animation: rotate-btn-pulse 2s infinite ease-in-out;
+}
+
+#rotate-tap-btn:active {
+  transform: scale(0.94);
+  box-shadow: 0 3px 10px rgba(255, 0, 128, 0.4);
+}
+
+@keyframes rotate-btn-pulse {
+  0%, 100% { box-shadow: 0 6px 20px rgba(255, 0, 128, 0.35); }
+  50% { box-shadow: 0 6px 28px rgba(255, 0, 128, 0.7); }
+}
+
+.rotate-hint {
+  display: block;
+  margin-top: 16px;
+  font-size: 0.95rem;
+  opacity: 0.6;
+  font-weight: 400;
+}
+
 /* Detect portrait orientation and show rotation message */
 @media (orientation: portrait) {
   #rotate-message {
@@ -335,7 +372,8 @@ html, body {
     display: none;
   }
   
-  #racing-ui, #connection-ui, #leaderboard {
+  #racing-ui, #connection-ui, #leaderboard,
+  #joystick-container, #button-controls {
     display: none !important;
   }
 }

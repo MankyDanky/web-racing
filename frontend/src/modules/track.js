@@ -1,13 +1,17 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createGLTFLoader } from './loaders.js';
+import { log, warn, error } from './debug.js';
+import { getAssetMap } from './tracks.js';
 
 // Function to load the track model and add to scene
 export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld, loadingManager, callback) {
   // Use the loading manager with your loader
-  const loader = new GLTFLoader(loadingManager);
-  
+  const loader = createGLTFLoader(loadingManager);
+  // Reverse variants reuse their base map's GLB assets (#43)
+  const assetMap = getAssetMap(mapId);
+
   loader.load(
-    `/models/maps/${mapId}/track.glb`,
+    `/models/maps/${assetMap}/track.glb`,
     (gltf) => {
       const track = gltf.scene;
       
@@ -34,7 +38,7 @@ export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld, loadin
       
       // Add to scene
       scene.add(track);
-      console.log(`Map ${mapId} track loaded successfully`);
+      log(`Map ${mapId} track loaded successfully`);
       
       // Add physics collider for the track
       addTrackCollider(track, ammo, physicsWorld);
@@ -45,10 +49,10 @@ export function loadTrackModel(ammo, mapId = "map1", scene, physicsWorld, loadin
       }
     },
     (xhr) => {
-      console.log(`Loading track: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
+      log(`Loading track: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
     },
     (error) => {
-      console.error(`Error loading track for ${mapId}:`, error);
+      error(`Error loading track for ${mapId}:`, error);
     }
   );
 }
@@ -144,16 +148,17 @@ function addTrackCollider(trackModel, ammo, physicsWorld) {
   // Add to physics world
   physicsWorld.addRigidBody(trackBody);
   
-  console.log("Track physics collider created successfully");
+  log("Track physics collider created successfully");
 }
 
 // Function to load map decorations
 export function loadMapDecorations(mapId = "map1", scene, renderer, camera, loadingManager) {
   // Use the loading manager with your loader
-  const loader = new GLTFLoader(loadingManager);
-  
+  const loader = createGLTFLoader(loadingManager);
+  const assetMap = getAssetMap(mapId);
+
   loader.load(
-    `/models/maps/${mapId}/decorations.glb`,
+    `/models/maps/${assetMap}/decorations.glb`,
     (gltf) => {
       const decorations = gltf.scene;
       
@@ -186,7 +191,7 @@ export function loadMapDecorations(mapId = "map1", scene, renderer, camera, load
         }
       });
       
-      console.log(`Processed ${materials.size} unique materials in decorations`);
+      log(`Processed ${materials.size} unique materials in decorations`);
       
       // Add to scene
       scene.add(decorations);
@@ -197,11 +202,11 @@ export function loadMapDecorations(mapId = "map1", scene, renderer, camera, load
         renderer.render(scene, camera);
       }
       
-      console.log(`Map ${mapId} decorations loaded successfully`);
+      log(`Map ${mapId} decorations loaded successfully`);
     },
     undefined,
     (error) => {
-      console.error(`Error loading map decorations for ${mapId}:`, error);
+      error(`Error loading map decorations for ${mapId}:`, error);
     }
   );
 }
@@ -218,7 +223,7 @@ export function checkGroundCollision(ammo, carBody, resetFunction) {
   
   // If car is below certain height, reset it
   if (position.y() < 0) {
-    console.log("Car fell off track - resetting position");
+    log("Car fell off track - resetting position");
     if (resetFunction) resetFunction(ammo);
   }
   

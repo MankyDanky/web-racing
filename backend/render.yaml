@@ -1,0 +1,44 @@
+# Render blueprint: deploy the party-code API with Postgres.
+# Frontend is static - deploy frontend/dist separately (Netlify/Vercel/Pages).
+services:
+  - type: web
+    name: webracing-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+    startCommand: gunicorn webracing_backend.wsgi --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: webracing-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"   # tighten to your exact hostname
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://your-frontend.example"
+      - key: ADMIN_ENABLED
+        value: "False"
+  - type: cron
+    name: webracing-code-cleanup
+    runtime: python
+    rootDir: backend
+    schedule: "*/15 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py cleanupexpiredcodes
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: webracing-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+
+databases:
+  - name: webracing-db
+    plan: free
