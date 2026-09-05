@@ -1,0 +1,54 @@
+# Render Blueprint (Infrastructure-as-Code) for Racez.io (#7, #8).
+#
+# ONE web service runs the whole game: Django serves both the built frontend and
+# the party-code API on a single port. Multiplayer signalling uses the public
+# PeerJS cloud, so no extra service or port is required — this fits the Render
+# FREE tier.
+#
+# To deploy: push this repo to GitHub, then in the Render dashboard choose
+# "New +" -> "Blueprint" and point it at your repo. Render reads this file.
+# Full step-by-step: see RENDER_SETUP.md.
+
+services:
+  - type: web
+    name: web-racing
+    runtime: python
+    plan: free
+    # Build the frontend (same-origin) AND install the backend, then collect
+    # static + migrate. See render-build.sh.
+    buildCommand: "./render-build.sh"
+    startCommand: "cd backend && gunicorn webracing_backend.wsgi --bind 0.0.0.0:$PORT"
+    # Free tier has no persistent disk; SQLite is ephemeral. For durable party
+    # codes attach the free Postgres below (uncomment `databases:` and the
+    # DATABASE_URL var). Party codes are short-lived, so SQLite is fine to start.
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: SECRET_KEY
+        generateValue: true          # Render generates a strong secret
+      - key: DEBUG
+        value: "False"
+      - key: FRONTEND_DIST
+        value: "/opt/render/project/src/frontend/dist"
+      # RENDER_EXTERNAL_HOSTNAME is injected automatically and auto-added to
+      # ALLOWED_HOSTS + CSRF_TRUSTED_ORIGINS by settings.py — nothing to set.
+      # Same-origin frontend => no CORS needed. Leave CORS unset.
+      #
+      # Uncomment to use the managed Postgres defined below:
+      # - key: DATABASE_URL
+      #   fromDatabase:
+      #     name: web-racing-db
+      #     property: connectionString
+      #
+      # Optional: lock the admin to your IP(s):
+      # - key: ADMIN_IP_ALLOWLIST
+      #   value: "1.2.3.4"
+      # Optional: move the admin off /admin/:
+      # - key: ADMIN_URL
+      #   value: "secret-console/"
+
+# Optional managed Postgres (free tier). Uncomment this block AND the
+# DATABASE_URL env var above to use it instead of ephemeral SQLite.
+# databases:
+#   - name: web-racing-db
+#     plan: free

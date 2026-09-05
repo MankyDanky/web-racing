@@ -6,15 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/",
+    "lint": "eslint src --ext .js",
+    "format": "prettier --write \"src/**/*.js\"",
+    "optimize:assets": "node scripts/optimize-assets.mjs",
+    "smoke": "node scripts/smoke-test.mjs"
   },
   "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "puppeteer": "^24.43.1",
     "vite": "^6.2.6"
   },
   "dependencies": {
-    "@vercel/analytics": "^1.5.0",
-    "cannon-es": "^0.20.0",
-    "cannon-es-debugger": "^1.0.0",
     "peerjs": "^1.5.4",
     "three": "^0.175.0"
   }

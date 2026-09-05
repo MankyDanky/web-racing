@@ -1,0 +1,34 @@
+{
+  "tracks": [
+    {
+      "id": "map1",
+      "name": "Forest Freeway",
+      "totalGates": 8,
+      "reverse": false,
+      "hasDecorations": true
+    },
+    {
+      "id": "map2",
+      "name": "Snowy Speedway",
+      "totalGates": 8,
+      "reverse": false,
+      "hasDecorations": true
+    },
+    {
+      "id": "map1-reverse",
+      "name": "Forest Freeway (Reverse)",
+      "baseMap": "map1",
+      "totalGates": 8,
+      "reverse": true,
+      "hasDecorations": true
+    },
+    {
+      "id": "map2-reverse",
+      "name": "Snowy Speedway (Reverse)",
+      "baseMap": "map2",
+      "totalGates": 8,
+      "reverse": true,
+      "hasDecorations": true
+    }
+  ]
+}

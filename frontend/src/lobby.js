@@ -1,24 +1,20 @@
+// Single source of truth for sanitizers (#30) instead of re-declaring them.
+import {
+  sanitizePlayerName, sanitizePlayerColor, sanitizeTrackId, sanitizePeerId,
+} from './modules/sanitize.js';
+// Env-driven API base URL + self-hosted broker options (#5) instead of a
+// hard-coded backend host / public PeerJS cloud.
+import { apiUrl, getPeerOptions } from './modules/netConfig.js';
+// Deep-link + QR support (#45).
+import { renderQRCanvas } from './modules/qrcode.js';
+// Versioned config handoff (#35).
+import { buildGameConfig, saveGameConfig } from './modules/gameConfig.js';
+// Auto-rejoin after an accidental refresh (#46).
+import { saveActiveParty, clearActiveParty, loadActiveParty } from './modules/activeParty.js';
+// Gated logging (#10).
+import { log, warn, error } from './modules/debug.js';
+
 const MAX_PARTY_SIZE = 8;
-const VALID_PLAYER_COLORS_LOBBY = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
-const VALID_TRACK_IDS_LOBBY = ['map1', 'map2'];
-const PEER_ID_PATTERN_LOBBY = /^[A-Za-z0-9_-]{4,100}$/;
-const FINISH_TIME_PATTERN_LOBBY = /^\d{1,3}:[0-5]\d$/;
-function sanitizePlayerName(name, fallback = 'Player') {
-  if (typeof name !== 'string') return fallback;
-  const cleaned = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\ufeff]/g, '').trim();
-  if (!cleaned) return fallback;
-  return cleaned.slice(0, 15);
-}
-function sanitizePlayerColor(color) {
-  return VALID_PLAYER_COLORS_LOBBY.includes(color) ? color : 'red';
-}
-function sanitizeTrackId(trackId) {
-  return VALID_TRACK_IDS_LOBBY.includes(trackId) ? trackId : 'map1';
-}
-function sanitizePeerId(id) {
-  if (typeof id !== 'string') return null;
-  return PEER_ID_PATTERN_LOBBY.test(id) ? id : null;
-}
 const PARTY_CODE_PATTERN = /^[A-Z2-9]{6}$/;
 
 // Class to manage the lobby system
@@ -87,14 +83,26 @@ class RacingLobby {
     }
     
     initPeerJS() {
-      // Create a new Peer with a random ID
-      this.peer = new Peer();
-      
+      // Use a cryptographically-random UUID as the PeerJS id (#12) instead of a
+      // short/sequential/guessable value, and honour a self-hosted broker (#5).
+      let requestedId;
+      try {
+        requestedId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? `racez-${crypto.randomUUID()}` : undefined;
+      } catch (e) { requestedId = undefined; }
+
+      const peerOptions = getPeerOptions();
+      if (requestedId) {
+        this.peer = peerOptions ? new Peer(requestedId, peerOptions) : new Peer(requestedId);
+      } else {
+        this.peer = peerOptions ? new Peer(peerOptions) : new Peer();
+      }
+
       this.peer.on('open', (id) => {
         this.playerId = id;
         // Store playerId in localStorage so it persists between pages
         localStorage.setItem('myPlayerId', id);
-        console.log('My peer ID is: ' + id);
+        log('My peer ID is: ' + id);
       });
       
       this.peer.on('connection', (conn) => {
@@ -102,7 +110,7 @@ class RacingLobby {
       });
       
       this.peer.on('error', (err) => {
-        console.error('Peer connection error:', err);
+        error('Peer connection error:', err);
         
         if (err.type === 'peer-unavailable') {
           this.joinStatus.textContent = 'Could not find that party. Check the code and try again.';
@@ -126,7 +134,7 @@ class RacingLobby {
             setTimeout(() => this.copyCodeBtn.textContent = 'Copy', 2000);
           })
           .catch(err => {
-            console.error('Failed to copy: ', err);
+            error('Failed to copy: ', err);
           });
       });
       
@@ -187,14 +195,14 @@ class RacingLobby {
         
         if (this.isHost) {
           // Host starts a multiplayer game without checking ready status
-          console.log("Starting multiplayer game as host");
+          log("Starting multiplayer game as host");
           this.startMultiplayerGame();
         } else if (this.hostId) {
           // Toggle ready status when not host
           this.toggleReadyStatus();
         } else {
           // Not in a party - start single player game
-          console.log("Starting single player game");
+          log("Starting single player game");
           this.startSinglePlayerGame();
         }
       });
@@ -238,7 +246,7 @@ class RacingLobby {
       this.createPartyBtn.textContent = "Connecting to server...";
       
       // Register with backend to get a short code
-      fetch('https://mankydanky.pythonanywhere.com/api/party-codes/create/', {
+      fetch(apiUrl('/api/party-codes/create/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -254,11 +262,14 @@ class RacingLobby {
         return response.json();
       })
       .then(data => {
-        console.log('Party created with code:', data.code);
+        log('Party created with code:', data.code);
         
         // Display the short code
         this.partyCodeDisplay.textContent = data.code;
-        
+
+        // Show a QR code + deep-link for phone players to scan/tap (#45)
+        this.showPartyShare(data.code);
+
         // Show host info
         this.hostInfo.classList.remove('hidden');
         this.createPartyBtn.classList.add('hidden');
@@ -286,7 +297,7 @@ class RacingLobby {
         this.playBtn.classList.remove('disabled');
       })
       .catch(error => {
-        console.error('Error creating party:', error);
+        error('Error creating party:', error);
         
         // Reset the button
         this.createPartyBtn.textContent = "Create Party";
@@ -305,7 +316,7 @@ class RacingLobby {
       this.joinStatus.textContent = 'Looking up party...';
       
       // Look up the peer ID from the short code
-      fetch(`https://mankydanky.pythonanywhere.com/api/party-codes/lookup/${code}/`)
+      fetch(apiUrl(`/api/party-codes/lookup/${code}/`))
         .then(response => {
           if (!response.ok) {
             throw new Error('Party not found');
@@ -321,7 +332,10 @@ class RacingLobby {
           
           conn.on('open', () => {
             this.hostId = hostPeerId;
-            
+
+            // Remember this party so an accidental refresh can auto-rejoin (#46).
+            saveActiveParty({ code, playerName: this.playerName, role: 'guest' });
+
             // Show racers panel when joining a party
             this.racersTitle.classList.remove('hidden');
             this.playersContainer.classList.remove('hidden');
@@ -357,13 +371,13 @@ class RacingLobby {
             
             // Handle connection closed - IMPORTANT: Add this handler
             conn.on('close', () => {
-              console.log('Connection to host was closed');
+              log('Connection to host was closed');
               this.handleHostDisconnection();
             });
             
             // Add error handler to also catch disconnections
             conn.on('error', (err) => {
-              console.error('Connection to host error:', err);
+              error('Connection to host error:', err);
               this.handleHostDisconnection();
             });
             
@@ -374,13 +388,16 @@ class RacingLobby {
           });
           
           conn.on('error', (err) => {
-            console.error('Connection error:', err);
+            error('Connection error:', err);
             this.joinStatus.textContent = 'Error connecting to host.';
           });
         })
         .catch(error => {
-          console.error('Error looking up party:', error);
+          error('Error looking up party:', error);
           this.joinStatus.textContent = 'Could not find that party. Check the code and try again.';
+          // If a rejoin attempt (#46) hit a party that no longer exists, drop
+          // the stale record so we don't keep retrying on every refresh.
+          clearActiveParty();
         });
     }
     
@@ -388,8 +405,11 @@ class RacingLobby {
       // Only process if we're actually in a party
       if (!this.hostId) return;
       
-      console.log('Host has disconnected - leaving party');
-      
+      log('Host has disconnected - leaving party');
+
+      // Nothing to rejoin anymore (#46).
+      clearActiveParty();
+
       // Clear heartbeat intervals
       if (this.heartbeatInterval) {
         clearInterval(this.heartbeatInterval);
@@ -416,6 +436,9 @@ class RacingLobby {
     }
     
     leaveParty() {
+      // Deliberately leaving - don't auto-rejoin on next load (#46).
+      clearActiveParty();
+
       // Clear heartbeat intervals
       if (this.heartbeatInterval) {
         clearInterval(this.heartbeatInterval);
@@ -437,7 +460,7 @@ class RacingLobby {
         try {
           hostConnection.connection.close();
         } catch (e) {
-          console.log('Error closing connection:', e);
+          log('Error closing connection:', e);
         }
       }
       
@@ -461,7 +484,7 @@ class RacingLobby {
     }
     
     handleIncomingConnection(conn) {
-      console.log('Incoming connection from:', conn.peer);
+      log('Incoming connection from:', conn.peer);
       
       // Store the connection
       this.connections.push({
@@ -486,7 +509,7 @@ class RacingLobby {
     handleMessage(conn, data) {
       if (!data || typeof data !== 'object') return;
 
-      console.log('Received message:', data.type);
+      log('Received message:', data.type);
       
       // Update last heartbeat time for this connection
       // (fall back to the authenticated peer ID of the connection itself)
@@ -505,7 +528,7 @@ class RacingLobby {
             // Reject requests whose claimed ID does not match the actual
             // peer connection, or once the party is full
             if (!requestPeerId || requestPeerId !== conn.peer || this.players.length >= MAX_PARTY_SIZE) {
-              console.warn('Rejected invalid join request from:', conn.peer);
+              warn('Rejected invalid join request from:', conn.peer);
               break;
             }
 
@@ -644,18 +667,22 @@ class RacingLobby {
               })
               .filter(Boolean);
 
-            sessionStorage.setItem('gameConfig', JSON.stringify({
-              type: 'startGame',
+            saveGameConfig(buildGameConfig({
               trackId: sanitizeTrackId(data.trackId),
-              players: players,
-              multiplayer: data.multiplayer === true
+              players,
+              multiplayer: data.multiplayer === true,
             }));
           }
+          // The race is starting - the game page owns state from here, so drop
+          // the lobby rejoin record (#46).
+          clearActiveParty();
           window.location.href = 'game.html';
           break;
           
         case 'partyEnded':
           alert('The host has ended the party.');
+          // Party is gone - don't try to rejoin it after the reload (#46).
+          clearActiveParty();
           // Hide only the racers title and player list
           this.racersTitle.classList.add('hidden');
           this.playersContainer.classList.add('hidden');
@@ -679,7 +706,7 @@ class RacingLobby {
               // Also update ready status if provided in the message
               if (typeof data.isReady !== 'undefined') {
                 this.players[playerIndex].isReady = data.isReady;
-                console.log(`Updated player ${data.playerName} ready status: ${data.isReady}`);
+                log(`Updated player ${data.playerName} ready status: ${data.isReady}`);
               }
               
               // Update UI
@@ -758,6 +785,8 @@ class RacingLobby {
           break;
 
         case 'kicked':
+          // Kicked out - don't auto-rejoin (#46).
+          clearActiveParty();
           // Reset state and UI
           this.hostId = null;
           this.connections = [];
@@ -785,9 +814,9 @@ class RacingLobby {
     }
 
     toggleReadyStatus() {
-      console.log(`Toggling ready status. Current status: ${this.isReady}`);
+      log(`Toggling ready status. Current status: ${this.isReady}`);
       this.isReady = !this.isReady;
-      console.log(`New ready status: ${this.isReady}`);
+      log(`New ready status: ${this.isReady}`);
       
       // Update button text
       if (this.isReady) {
@@ -804,15 +833,15 @@ class RacingLobby {
         playerId: this.playerId,
         isReady: this.isReady
       };
-      console.log('Sending ready status to host:', message);
+      log('Sending ready status to host:', message);
       this.sendToHost(message);
     }
     
     broadcastToAll(message, excludePeerId = null) {
-      console.log('Broadcasting message:', message);
+      log('Broadcasting message:', message);
       this.connections.forEach(conn => {
         if (conn.peerId !== excludePeerId) {
-          console.log('Broadcasting message to:', conn.peerId);
+          log('Broadcasting message to:', conn.peerId);
           conn.connection.send(message);
         }
       });
@@ -911,7 +940,7 @@ class RacingLobby {
       const playerToKick = this.players.find(player => player.id === playerId);
       if (!playerToKick) return;
       
-      console.log(`Kicking player: ${playerToKick.name} (${playerId})`);
+      log(`Kicking player: ${playerToKick.name} (${playerId})`);
       
       // Find the connection to this player
       const connectionToKick = this.connections.find(conn => conn.peerId === playerId);
@@ -927,7 +956,7 @@ class RacingLobby {
           try {
             connectionToKick.connection.close();
           } catch (e) {
-            console.log('Error closing connection:', e);
+            log('Error closing connection:', e);
           }
         }, 200);
       }
@@ -944,7 +973,7 @@ class RacingLobby {
     }
     
     startMultiplayerGame() {
-      console.log("Creating multiplayer game with players:", this.players);
+      log("Creating multiplayer game with players:", this.players);
       
       // Ensure there's at least the host in the players list
       if (this.players.length === 0) {
@@ -962,13 +991,13 @@ class RacingLobby {
         }
       }
       
-      const gameConfig = {
-        type: 'startGame',
-        trackId: this.selectedMap, // Use selected map instead of hardcoding map1
+      // Versioned, validated config handoff (#35)
+      const gameConfig = buildGameConfig({
+        trackId: this.selectedMap,
         players: this.players,
-        multiplayer: true
-      };
-      
+        multiplayer: true,
+      });
+
       // Broadcast to all connected players
       this.broadcastToAll({
         type: 'startGame',
@@ -976,20 +1005,22 @@ class RacingLobby {
         players: this.players,
         multiplayer: true
       });
-      
+
       // Save game config to session storage
-      sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
-      console.log("Game config saved:", gameConfig);
+      saveGameConfig(gameConfig);
+      // The game page takes over now - clear the lobby rejoin record (#46).
+      clearActiveParty();
+      log("Game config saved:", gameConfig);
       
       // Navigate to game page
-      console.log("Navigating to game.html");
+      log("Navigating to game.html");
       setTimeout(() => {
         // Close all connections after notifying other players
         this.connections.forEach(conn => {
           try {
             conn.connection.close();
           } catch (e) {
-            console.log('Error closing connection:', e);
+            log('Error closing connection:', e);
           }
         });
         // Close the peer connection
@@ -1001,27 +1032,28 @@ class RacingLobby {
     }
     
     startSinglePlayerGame() {
-      // Create a single player game config
-      const gameConfig = {
-        type: 'startGame',
-        trackId: this.selectedMap, // Use selected map instead of hardcoding map1
+      // Versioned, validated single-player config (#35)
+      const gameConfig = buildGameConfig({
+        trackId: this.selectedMap,
         players: [{
-          id: this.playerId || 'solo-player',
+          id: this.playerId || `solo-${Date.now()}`,
           name: this.playerName,
           isHost: true,
-          playerColor: sessionStorage.getItem('carColor') || 'red' // Add player color
+          playerColor: sessionStorage.getItem('carColor') || 'red',
         }],
-        isSinglePlayer: true
-      };
-      
-      // Save game config to session storage
-      sessionStorage.setItem('gameConfig', JSON.stringify(gameConfig));
-      
-      // Navigate to game page
+        multiplayer: false,
+        isSinglePlayer: true,
+      });
+
+      saveGameConfig(gameConfig);
+      clearActiveParty(); // (#46)
       window.location.href = 'game.html';
     }
     
     stopHosting() {
+      // Host is tearing the party down - no rejoin (#46).
+      clearActiveParty();
+
       // Clear heartbeat intervals
       if (this.heartbeatInterval) {
         clearInterval(this.heartbeatInterval);
@@ -1044,7 +1076,7 @@ class RacingLobby {
         try {
           conn.connection.close();
         } catch (e) {
-          console.log('Error closing connection:', e);
+          log('Error closing connection:', e);
         }
       });
       
@@ -1164,10 +1196,10 @@ class RacingLobby {
     sendToHost(message) {
       const hostConnection = this.connections.find(conn => conn.peerId === this.hostId);
       if (hostConnection && hostConnection.connection) {
-        console.log('Sending update to host:', message);
+        log('Sending update to host:', message);
         hostConnection.connection.send(message);
       } else {
-        console.error('No host connection found');
+        error('No host connection found');
       }
     }
 
@@ -1221,9 +1253,106 @@ class RacingLobby {
       
       // Remove any disconnected players
       disconnectedPlayers.forEach(player => {
-        console.log(`Player ${player.name} (${player.id}) timed out - removing from party`);
+        log(`Player ${player.name} (${player.id}) timed out - removing from party`);
         this.removePlayer(player.id);
       });
+    }
+
+    // Render a QR code + copyable deep-link so phone players can join fast (#45).
+    showPartyShare(code) {
+      let container = document.getElementById('party-share');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'party-share';
+        Object.assign(container.style, {
+          marginTop: '12px', textAlign: 'center', display: 'flex',
+          flexDirection: 'column', alignItems: 'center', gap: '6px',
+        });
+        // Insert into the host info block.
+        const codeDisplayParent = this.partyCodeDisplay?.closest('.code-display') || this.hostInfo;
+        if (codeDisplayParent) codeDisplayParent.appendChild(container);
+      }
+      container.replaceChildren();
+
+      const url = `${window.location.origin}${window.location.pathname}?party=${code}`;
+
+      const qr = renderQRCanvas(url, 4, 3);
+      qr.style.borderRadius = '8px';
+      qr.style.background = '#fff';
+      qr.style.padding = '4px';
+      container.appendChild(qr);
+
+      const hint = document.createElement('div');
+      hint.textContent = 'Scan to join on your phone';
+      hint.style.fontSize = '12px';
+      hint.style.opacity = '0.85';
+      container.appendChild(hint);
+
+      const linkBtn = document.createElement('button');
+      linkBtn.className = 'icon-btn';
+      linkBtn.textContent = 'Copy invite link';
+      linkBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(url).then(() => {
+          linkBtn.textContent = 'Link copied!';
+          setTimeout(() => { linkBtn.textContent = 'Copy invite link'; }, 2000);
+        }).catch(() => {});
+      });
+      container.appendChild(linkBtn);
+    }
+
+    // Connect to a party code once our peer id is ready, retrying briefly while
+    // PeerJS negotiates our id. Shared by deep-link (#45) and rejoin (#46).
+    joinPartyWhenReady(code, attemptsLeft = 40) {
+      if (this.joinCodeInput) this.joinCodeInput.value = code;
+      const attempt = (left) => {
+        if (this.playerId) {
+          this.joinParty(code);
+        } else if (left > 0) {
+          setTimeout(() => attempt(left - 1), 150);
+        }
+      };
+      attempt(attemptsLeft);
+    }
+
+    // Auto-join a party from a ?party=CODE deep link (#45).
+    // Returns true when a deep link was present (so callers can skip rejoin).
+    tryDeepLinkJoin() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const raw = (params.get('party') || '').trim().toUpperCase();
+        if (PARTY_CODE_PATTERN.test(raw)) {
+          this.joinPartyWhenReady(raw);
+          return true;
+        }
+      } catch (e) { /* ignore */ }
+      return false;
+    }
+
+    // After an accidental refresh, silently rejoin the party we were in (#46).
+    // Only guests auto-rejoin: a host that refreshed gets a new peer id, which
+    // orphans the old code, so we don't try to resurrect a host session.
+    tryRejoinActiveParty() {
+      let record;
+      try {
+        record = loadActiveParty();
+      } catch (e) {
+        record = null;
+      }
+      if (!record || record.role !== 'guest') {
+        // Stale/host record: make sure it can't linger.
+        if (record) clearActiveParty();
+        return false;
+      }
+
+      // Restore the player's chosen name before reconnecting.
+      if (record.playerName) {
+        this.playerName = record.playerName;
+        if (this.playerNameInput) this.playerNameInput.value = record.playerName;
+      }
+
+      if (this.joinStatus) this.joinStatus.textContent = 'Reconnecting to your party...';
+      this.joinPartyWhenReady(record.code);
+      return true;
     }
 
     initMapSelector() {
@@ -1290,11 +1419,19 @@ class RacingLobby {
   // Initialize the lobby when the page loads
   document.addEventListener('DOMContentLoaded', () => {
     const lobby = new RacingLobby();
-    
+
+    // Auto-join from ?party=CODE deep links / QR scans (#45), otherwise try to
+    // rejoin a party we were in before an accidental refresh (#46).
+    const deepLinked = lobby.tryDeepLinkJoin();
+    if (!deepLinked) lobby.tryRejoinActiveParty();
+
     // Check for orientation changes
     window.addEventListener('orientationchange', handleOrientationChange);
     window.addEventListener('resize', handleOrientationChange);
-    
+
+    // Tap-to-rotate: fullscreen + landscape lock from the overlay button.
+    setupRotateButton();
+
     // Initial check
     handleOrientationChange();
     
@@ -1329,6 +1466,39 @@ class RacingLobby {
       });
     }
   });
+
+  // Tap-to-rotate: request fullscreen then lock to landscape (must be from a
+  // user gesture; feature-detected and degrades gracefully).
+  async function forceLandscapeRotation() {
+    try {
+      const docEl = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+        if (req) { try { await req.call(docEl); } catch (e) { /* denied; continue */ } }
+      }
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        for (const mode of ['landscape', 'landscape-primary', 'landscape-secondary']) {
+          try { await screen.orientation.lock(mode); break; } catch (e) { /* next */ }
+        }
+      }
+    } catch (e) { /* ignore */ }
+    handleOrientationChange();
+  }
+
+  function setupRotateButton() {
+    const rotateMessage = document.getElementById('rotate-message');
+    const btn = document.getElementById('rotate-tap-btn');
+    if (!rotateMessage) return;
+    const trigger = (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } forceLandscapeRotation(); };
+    if (btn) {
+      btn.addEventListener('click', trigger);
+      btn.addEventListener('touchend', trigger, { passive: false });
+    }
+    rotateMessage.addEventListener('click', (e) => {
+      if (btn && (e.target === btn || btn.contains(e.target))) return;
+      trigger(e);
+    });
+  }
 
   // Function to handle orientation changes
   function handleOrientationChange() {

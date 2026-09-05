@@ -5,7 +5,8 @@ from datetime import timedelta
 from django.utils import timezone
 
 class PartyCode(models.Model):
-    code = models.CharField(max_length=6, unique=True)
+    # max_length=8 so the collision-fallback 8-char code can actually be stored.
+    code = models.CharField(max_length=8, unique=True)
     peer_id = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()

@@ -1,22 +1,22 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createGLTFLoader } from './loaders.js';
 import Peer from 'peerjs';
+import {
+  sanitizePlayerName, sanitizePlayerColor, sanitizePeerId,
+} from './sanitize.js';
+import { sanitizePreciseTime, formatTime } from './timing.js';
+import { log, warn, error } from './debug.js';
+import { getPeerOptions, generatePeerId } from './netConfig.js';
+import {
+  SnapshotBuffer, encodeTransform, decodeTransform, isBinaryTransform, INTERP_DELAY_MS,
+} from './netcode.js';
+import { createNameSprite } from './nametag.js';
 
-const VALID_PLAYER_COLORS_MP = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet'];
-const FINISH_TIME_PATTERN_MP = /^\d{1,3}:[0-5]\d$/;
-function sanitizePlayerName(name, fallback = 'Player') {
-  if (typeof name !== 'string') return fallback;
-  const cleaned = name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\ufeff]/g, '').trim();
-  if (!cleaned) return fallback;
-  return cleaned.slice(0, 15);
-}
-function sanitizePlayerColor(color) {
-  return VALID_PLAYER_COLORS_MP.includes(color) ? color : 'red';
-}
-function sanitizeFinishTime(value) {
-  if (typeof value !== 'string') return null;
-  return FINISH_TIME_PATTERN_MP.test(value) ? value : null;
-}
+const CAR_TINT = {
+  red: 0xff5a5a, orange: 0xffa54d, yellow: 0xffe14d, green: 0x3fae4a,
+  blue: 0x4a8bd6, indigo: 0xb35ad0, violet: 0x8a4fc0,
+};
+
 function isFiniteNumber(value) {
   return typeof value === 'number' && isFinite(value);
 }
@@ -28,713 +28,628 @@ const state = {
   opponentCars: {},
   gameConfig: null,
   isHost: false,
+  hostId: null,
   allPlayers: [],
-  allCarsData: {},
-  lastBroadcastTime: 0
+  allCarsData: {},      // host: latest transform per peer (binary-decoded objects)
+  lastBroadcastTime: 0,
+  // Host-authoritative gate progression per peer (#3)
+  gateProgress: {},     // peerId -> { gateIndex, updatedAt, finishMs }
+  raceStartAt: 0,       // absolute start timestamp (#4)
+  lastHeartbeatSent: 0,
+  lastPingFrom: {},     // peerId -> timestamp (#8)
+  onJoinFailed: null,   // UI callback (#6)
+  onHostMigrated: null, // UI callback (#9)
 };
 
 let connectionRetryCount = 0;
-const MAX_RETRIES = 15;
+const MAX_RETRIES = 8;         // bounded (#6)
+const HEARTBEAT_INTERVAL = 2000;
+const PEER_TIMEOUT = 6000;     // mark DNF after this silence (#8)
+const BROADCAST_INTERVAL = 55; // ~18 Hz (#2)
+
+
+// Shared store (#29) - replaces ad-hoc window.* coordination. Injected via
+// initMultiplayer; falls back to window.* if absent for safety.
+let store = null;
+
+function emit(event, payload) {
+  if (store) store.emit(event, payload);
+}
+function getFinishTimes() {
+  return (store && store.playerFinishTimes) || window.playerFinishTimes || {};
+}
+function getGateData() {
+  return (store && store.gateData) || window.gateData;
+}
+function refreshLeaderboard() {
+  // Notify listeners (main.js subscribes to 'leaderboardDirty') and fall back to
+  // the global hook. NB: must NOT call itself — that was an infinite-recursion
+  // stack overflow that silently killed the finish-time leaderboard update (#4).
+  emit('leaderboardDirty');
+  if (typeof window !== 'undefined' && typeof window.updateLeaderboard === 'function') {
+    window.updateLeaderboard();
+  }
+}
 
 // Initialize multiplayer from game config
-export function initMultiplayer(gameState) {
+export function initMultiplayer(gameState, injectedStore = null) {
+  store = injectedStore;
   try {
     const savedConfig = sessionStorage.getItem('gameConfig');
     if (savedConfig) {
       state.gameConfig = JSON.parse(savedConfig);
-      
-      // Check if we're the host
       const myPlayerId = localStorage.getItem('myPlayerId');
-      state.isHost = state.gameConfig.players.some(player => player.id === myPlayerId && player.isHost);
-      
-      console.log('Game config loaded:', state.gameConfig);
-      console.log('Playing as host:', state.isHost);
-      
-      // Store player list (sanitized - it may contain data from other peers)
-      state.allPlayers = state.gameConfig.players.map(player => ({
-        ...player,
-        name: sanitizePlayerName(player.name),
-        playerColor: sanitizePlayerColor(player.playerColor)
+      state.isHost = state.gameConfig.players.some((p) => p.id === myPlayerId && p.isHost);
+      const host = state.gameConfig.players.find((p) => p.isHost);
+      state.hostId = host ? host.id : null;
+      log('Game config loaded. Host:', state.isHost);
+
+      // Roster is the trusted source of names/colors (#11)
+      state.allPlayers = state.gameConfig.players.map((p) => ({
+        ...p,
+        name: sanitizePlayerName(p.name),
+        playerColor: sanitizePlayerColor(p.playerColor),
       }));
     }
   } catch (e) {
-    console.error('Error loading game config:', e);
+    error('Error loading game config:', e);
   }
-  
-  // Initialize peer connection if we have a game config
-  if (state.gameConfig) {
+
+  // Only spin up PeerJS for genuine multiplayer games. A single-player race
+  // (one player, or an explicit isSinglePlayer flag) must never try to reach a
+  // host - doing so previously surfaced a spurious "Couldn't reach the host".
+  const isMultiplayerGame = !!(
+    state.gameConfig &&
+    state.gameConfig.multiplayer === true &&
+    Array.isArray(state.gameConfig.players) &&
+    state.gameConfig.players.length > 1
+  );
+  if (isMultiplayerGame) {
     initPeerConnection(gameState);
+  } else {
+    log('Single-player game - networking disabled');
   }
-  
+
   state.checkAllPlayersConnected = checkAllPlayersConnected;
   state.broadcastRaceStart = broadcastRaceStart;
-  state.broadcastCountdownStart = broadcastCountdownStart; 
-  
+  state.broadcastCountdownStart = broadcastCountdownStart;
   return state;
 }
 
+function trustedPlayer(peerId) {
+  return state.allPlayers.find((p) => p.id === peerId);
+}
+
 function initPeerConnection(gameState) {
-  // Get the player ID that was stored during lobby creation
   const myPlayerId = localStorage.getItem('myPlayerId');
-  
   if (!myPlayerId) {
-    console.error('No player ID found in localStorage');
+    error('No player ID found in localStorage');
     return;
   }
-  
-  // If we have game config, use that to establish connections
-  if (state.gameConfig && state.gameConfig.players && state.gameConfig.players.length > 0) {
-    console.log('Initializing peer connection with game config', state.gameConfig);
-    
-    // Create a new peer with the ORIGINAL ID, but with a slight delay
-    setTimeout(() => {
-      state.peer = new Peer(myPlayerId);
-      
-      state.peer.on('open', (id) => {
-        console.log('Game peer connection established with ID:', id);
-        
-        if (state.isHost) {
-          console.log('Playing as host - waiting for player connections');
-          
-          // Host waits for connections from players
-          state.peer.on('connection', (conn) => {
-            console.log('Player connected:', conn.peer);
-            
-            conn.on('open', () => {
-              console.log('Connection to player fully established:', conn.peer);
-              state.playerConnections.push(conn);
-              setupMessageHandlers(conn, gameState);
-            });
-          });
-          
-          // Load opponent car models
-          loadOpponentCarModels(gameState.scene);
-        } else {
-          console.log('Playing as guest - connecting to host');
-          
-          // Find the host player
-          const hostPlayer = state.gameConfig.players.find(player => player.isHost);
-          
-          if (hostPlayer) {
-            console.log('Connecting to host:', hostPlayer.id);
-            
-            // Define a function to attempt connection with retry
-            function attemptConnection() {
-              console.log(`Connection attempt ${connectionRetryCount + 1} to host: ${hostPlayer.id}`);
-              
-              // Connect to host
-              const conn = state.peer.connect(hostPlayer.id);
-              let connectionSuccessful = false;
-              
-              // Set a timeout to retry if connection doesn't complete
-              const connectionTimeout = setTimeout(() => {
-                if (!connectionSuccessful) {
-                  console.log("Connection attempt timed out");
-                  connectionRetryCount++;
-                  if (connectionRetryCount < MAX_RETRIES) {
-                    console.log(`Retrying connection in 2 seconds... (attempt ${connectionRetryCount + 1})`);
-                    setTimeout(attemptConnection, 2000);
-                  } else {
-                    console.error(`Failed to connect after ${MAX_RETRIES} attempts`);
-                  }
-                }
-              }, 5000); // Wait 5 seconds for connection to complete
-              
-              conn.on('open', () => {
-                console.log('Connected to host!');
-                connectionSuccessful = true;
-                clearTimeout(connectionTimeout);
-                connectionRetryCount = 0; // Reset counter on success
-                state.playerConnections.push(conn);
-                setupMessageHandlers(conn, gameState);
-                loadOpponentCarModels(gameState.scene);
-              });
-              
-              conn.on('error', (err) => {
-                console.error('Error connecting to host:', err);
-                // Error handling already covered by the timeout
-              });
-            }
-            
-            // Start the first connection attempt
-            attemptConnection();
-          } else {
-            console.error('No host player found in game config');
+  if (!state.gameConfig || !state.gameConfig.players || state.gameConfig.players.length === 0) {
+    warn('No game config found - multiplayer disabled');
+    return;
+  }
+
+  const peerOptions = getPeerOptions();
+  state.peer = peerOptions ? new Peer(myPlayerId, peerOptions) : new Peer(myPlayerId);
+
+  // Proper open sequencing instead of a blind 1s delay (#7)
+  state.peer.on('open', (id) => {
+    log('Peer open:', id);
+    if (state.isHost) {
+      state.peer.on('connection', (conn) => {
+        conn.on('open', () => {
+          // Only accept connections from peers in the roster (#11)
+          if (!trustedPlayer(conn.peer)) {
+            warn('Rejected connection from unknown peer:', conn.peer);
+            try { conn.close(); } catch (e) {}
+            return;
           }
-        }
+          log('Player connected:', conn.peer);
+          state.playerConnections.push(conn);
+          state.lastPingFrom[conn.peer] = Date.now();
+          setupMessageHandlers(conn, gameState);
+        });
       });
-      
-      state.peer.on('error', (err) => {
-        console.error('Peer connection error:', err);
-        if (err.type === 'unavailable-id') {
-          console.log('ID is taken, waiting 2 seconds before retrying...');
-          // Try again with a longer delay
-          setTimeout(() => initPeerConnection(gameState), 2000);
+      loadOpponentCarModels(gameState.scene);
+      startHeartbeat();
+    } else {
+      connectToHost(gameState);
+    }
+  });
+
+  state.peer.on('error', (err) => {
+    error('Peer error:', err.type);
+    if (err.type === 'unavailable-id') {
+      // The original id collided. Retry with a fresh crypto id, bounded (#6, #12)
+      if (connectionRetryCount < MAX_RETRIES) {
+        connectionRetryCount++;
+        const fresh = generatePeerId();
+        localStorage.setItem('myPlayerId', fresh);
+        warn(`ID unavailable, retrying with fresh id (${connectionRetryCount}/${MAX_RETRIES})`);
+        setTimeout(() => {
+          try { state.peer.destroy(); } catch (e) {}
+          initPeerConnection(gameState);
+        }, 800);
+      } else if (state.onJoinFailed) {
+        state.onJoinFailed("Couldn't get a network id. Please try again.");
+      }
+    } else if (err.type === 'peer-unavailable' && state.onJoinFailed) {
+      state.onJoinFailed("Couldn't reach the host.");
+    }
+  });
+}
+
+function connectToHost(gameState) {
+  const hostPlayer = state.gameConfig.players.find((p) => p.isHost);
+  if (!hostPlayer) {
+    error('No host player in config');
+    if (state.onJoinFailed) state.onJoinFailed('No host found for this party.');
+    return;
+  }
+  state.hostId = hostPlayer.id;
+
+  function attempt() {
+    log(`Connecting to host (attempt ${connectionRetryCount + 1})`);
+    const conn = state.peer.connect(hostPlayer.id, { reliable: false });
+    let ok = false;
+    const timeout = setTimeout(() => {
+      if (ok) return;
+      connectionRetryCount++;
+      if (connectionRetryCount < MAX_RETRIES) {
+        setTimeout(attempt, 1500);
+      } else {
+        error(`Failed to connect after ${MAX_RETRIES} attempts`);
+        if (state.onJoinFailed) state.onJoinFailed("Couldn't join the race. The host may have left.");
+      }
+    }, 4000);
+
+    conn.on('open', () => {
+      ok = true;
+      clearTimeout(timeout);
+      connectionRetryCount = 0;
+      log('Connected to host!');
+      state.playerConnections.push(conn);
+      state.lastPingFrom[conn.peer] = Date.now();
+      setupMessageHandlers(conn, gameState);
+      loadOpponentCarModels(gameState.scene);
+      startHeartbeat();
+    });
+    conn.on('error', (err) => error('Error connecting to host:', err));
+  }
+  attempt();
+}
+
+function startHeartbeat() {
+  if (state._heartbeatTimer) return;
+  state._heartbeatTimer = setInterval(() => {
+    const now = Date.now();
+    // Send pings (#8)
+    state.playerConnections.forEach((conn) => {
+      if (conn && conn.open) {
+        try { conn.send({ type: 'ping', t: now }); } catch (e) {}
+      }
+    });
+    // Detect silent peers -> DNF (#8)
+    Object.entries(state.lastPingFrom).forEach(([peerId, last]) => {
+      if (now - last > PEER_TIMEOUT) {
+        const opp = state.opponentCars[peerId];
+        if (opp && !opp.dnf) {
+          opp.dnf = true;
+          opp.raceFinished = true;
+          if (opp.model) opp.model.visible = false;
+          warn(`Peer ${peerId} timed out -> DNF`);
+          getFinishTimes()[peerId] = 'DNF';
+          refreshLeaderboard();
+          // Host migration (#9): if the host disconnected, elect a new one.
+          if (peerId === state.hostId) handleHostLoss();
         }
-      });
-    }, 1000); 
+      }
+    });
+  }, HEARTBEAT_INTERVAL);
+}
+
+// Host migration (#9): deterministically elect the lowest surviving peer id as
+// the new host. If that's us, take over broadcasting.
+function handleHostLoss() {
+  const survivors = state.allPlayers
+    .map((p) => p.id)
+    .filter((id) => id === state.peer.id || (state.opponentCars[id] && !state.opponentCars[id].dnf));
+  survivors.sort();
+  const newHostId = survivors[0];
+  if (!newHostId) return;
+  state.hostId = newHostId;
+  if (newHostId === state.peer.id && !state.isHost) {
+    state.isHost = true;
+    log('Elected as new host after migration');
+    if (state.onHostMigrated) state.onHostMigrated(true);
   } else {
-    console.warn('No game config found - multiplayer disabled');
+    if (state.onHostMigrated) state.onHostMigrated(false);
   }
 }
 
-// Move the message handling to a separate function with extra debugging
 function setupMessageHandlers(conn, gameState) {
-  console.log('Setting up message handlers for connection:', conn.peer);
-  
-  // Test message send and receive
-  if (!state.isHost) {
-    // If client, send a test message to host
-    try {
-      conn.send({
-        type: 'connectionTest',
-        message: 'Hello from client!',
-        timestamp: Date.now()
-      });
-      console.log('Test message sent to host');
-    } catch (e) {
-      console.error('Failed to send test message:', e);
-    }
-  }
-  
-  // Update the message handler in setupMessageHandlers function
   conn.on('data', (data) => {
     try {
-      if (data.type === 'connectionTest') {
-        console.log('Connection test message received!');
-        // Send acknowledgment
-        conn.send({
-          type: 'connectionTestAck',
-          message: 'Test received!',
-          timestamp: Date.now()
-        });
-      } else if (data.type === 'carUpdate') {
-        // If host, store the car data for broadcasting later
-        if (state.isHost) {
-          state.allCarsData[conn.peer] = data;
-        }
-        // Update the opponent car position locally
-        updateOpponentCarPosition(conn.peer, data);
-      } else if (data.type === 'carUpdateAll') {
-        // Client receives all car data from host
-        if (!state.isHost && data.cars) {
-          console.log(`Received positions for ${Object.keys(data.cars).length} cars`);
-          // Update all car positions
-          Object.entries(data.cars).forEach(([playerId, carData]) => {
-            // Skip my own car
-            if (playerId === state.peer.id) return;
-            
-            // Update this opponent car
-            updateOpponentCarPosition(playerId, carData);
-          });
-        }
-      } else if (data.type === 'countdownStart') {
-        console.log("🚦 COUNTDOWN START RECEIVED - starting countdown! 🚦");
-        // Start countdown for all players simultaneously
-        if (window.startCountdown) {
-          window.startCountdown();
-        } else {
-          console.error('window.startCountdown not available!');
-        }
-      } else if (data.type === 'raceStart') {
-        console.log("RACE START RECEIVED - force starting race!");
-        // Force race to start if countdown was started but race hasn't started yet
-        window.raceState.raceStarted = true;
+      // Binary transform fast-path (#2)
+      if (isBinaryTransform(data)) {
+        const decoded = decodeTransform(data);
+        handleTransform(conn.peer, decoded);
+        return;
       }
+      if (!data || typeof data !== 'object') return;
+
+      switch (data.type) {
+        case 'ping':
+          state.lastPingFrom[conn.peer] = Date.now();
+          try { conn.send({ type: 'pong', t: data.t }); } catch (e) {}
+          break;
+        case 'pong':
+          state.lastPingFrom[conn.peer] = Date.now();
+          break;
+        case 'carUpdate':
+          // Guest -> host transform (JSON fallback). Host records + rebroadcasts.
+          if (state.isHost) {
+            recordHostProgress(conn.peer, data);
+          }
+          handleTransform(conn.peer, normalizeJsonTransform(data));
+          break;
+        case 'carUpdateAll':
+          if (!state.isHost && data.cars) {
+            Object.entries(data.cars).forEach(([pid, carData]) => {
+              if (pid === state.peer.id) return;
+              handleTransform(pid, carData);
+            });
+          }
+          break;
+        case 'countdownStart':
+          // Absolute-timestamp countdown sync (#4)
+          if (typeof data.startAt === 'number' && window.startCountdownAt) {
+            window.startCountdownAt(data.startAt);
+          } else if (window.startCountdown) {
+            window.startCountdown();
+          }
+          break;
+        case 'raceStart':
+          window.raceState.raceStarted = true;
+          break;
+        case 'finishResult':
+          // Host-authoritative finish time (#3): only the host may set these.
+          if (conn.peer === state.hostId && data.peerId && data.finishTime) {
+            const ft = sanitizePreciseTime(data.finishTime);
+            if (ft) {
+              getFinishTimes()[data.peerId] = ft;
+              const opp = state.opponentCars[data.peerId];
+              if (opp) opp.raceFinished = true;
+              refreshLeaderboard();
+            }
+          }
+          break;
+        default:
+          break;
+      }
+      state.lastPingFrom[conn.peer] = Date.now();
     } catch (err) {
-      console.error('Error processing message:', err);
+      error('Error processing message:', err);
     }
   });
-  
-  // Client data relay handling for host
-  if (state.isHost) {
-    console.log("Setting up host message relay for player:", conn.peer);
-  }
-  
-  // Handle connection closing
+
   conn.on('close', () => {
-    console.log('Connection closed:', conn.peer);
-    state.playerConnections = state.playerConnections.filter(c => c.peer !== conn.peer);
+    log('Connection closed:', conn.peer);
+    state.playerConnections = state.playerConnections.filter((c) => c.peer !== conn.peer);
+    const opp = state.opponentCars[conn.peer];
+    if (opp) { opp.dnf = true; opp.raceFinished = true; if (opp.model) opp.model.visible = false; }
+    getFinishTimes()[conn.peer] = 'DNF';
+    if (conn.peer === state.hostId) handleHostLoss();
+    refreshLeaderboard();
   });
-  
-  // Handle connection errors
-  conn.on('error', (err) => {
-    console.error('Connection error with', conn.peer, ':', err);
+
+  conn.on('error', (err) => error('Connection error with', conn.peer, ':', err));
+}
+
+function normalizeJsonTransform(data) {
+  return {
+    position: data.position || {},
+    quaternion: data.quaternion || {},
+    gateIndex: data.raceProgress ? data.raceProgress.currentGateIndex : 0,
+    distanceToNextGate: data.raceProgress ? data.raceProgress.distanceToNextGate : 1e6,
+    finished: false,
+  };
+}
+
+// Host-authoritative gate progression tracking (#3). The host derives finish
+// times from the gate-progression stream it already receives and rejects
+// out-of-order jumps. Peers can no longer simply self-report a winning time.
+function recordHostProgress(peerId, data) {
+  if (!state.raceStartAt) return;
+  const gp = state.gateProgress[peerId] || { gateIndex: 0, updatedAt: 0, finishMs: null };
+  let claimed = 0;
+  if (data.raceProgress && Number.isFinite(Number(data.raceProgress.currentGateIndex))) {
+    claimed = Math.floor(Number(data.raceProgress.currentGateIndex));
+  }
+  // Only allow advancing by at most 1 gate at a time, and never backwards past
+  // what we've already recorded (rejects out-of-order jumps).
+  if (claimed === gp.gateIndex + 1) {
+    gp.gateIndex = claimed;
+    gp.updatedAt = Date.now();
+    const gd = getGateData(); const totalGates = gd ? gd.totalGates : 8;
+    if (gp.gateIndex >= totalGates && gp.finishMs == null) {
+      gp.finishMs = Date.now() - state.raceStartAt;
+      const timeStr = formatTime(gp.finishMs);
+      getFinishTimes()[peerId] = timeStr;
+      // Broadcast the authoritative result to everyone (#3)
+      broadcastFinishResult(peerId, timeStr);
+      refreshLeaderboard();
+      log(`Host recorded finish for ${peerId}: ${timeStr}`);
+    }
+  } else if (claimed > gp.gateIndex) {
+    // Suspicious multi-gate jump - ignore, keep our recorded value.
+    warn(`Rejected out-of-order gate jump from ${peerId}: ${gp.gateIndex} -> ${claimed}`);
+  }
+  state.gateProgress[peerId] = gp;
+}
+
+function broadcastFinishResult(peerId, timeStr) {
+  state.playerConnections.forEach((conn) => {
+    if (conn && conn.open) {
+      try { conn.send({ type: 'finishResult', peerId, finishTime: timeStr }); } catch (e) {}
+    }
   });
 }
 
-// Load opponent car models for all players
 function loadOpponentCarModels(scene) {
   if (!state.gameConfig || !state.gameConfig.players) return;
-  
   const myPlayerId = localStorage.getItem('myPlayerId');
-  
-  state.gameConfig.players.forEach(player => {
-    // Don't create a model for ourselves
+  state.gameConfig.players.forEach((player) => {
     if (player.id === myPlayerId) return;
-    
-    // Use the original player ID
     loadOpponentCarModel(player.id, scene);
   });
 }
 
-// Load opponent car model with appropriate color
-function loadOpponentCarModel(playerId, scene) {
-  const loader = new GLTFLoader();
-  
-  // Find player info from gameConfig
-  let playerName = 'Player';
-  let playerColor = 'red'; // Default color
-  
-  if (state.gameConfig && state.gameConfig.players) {
-    const playerInfo = state.gameConfig.players.find(p => p.id === playerId);
-    if (playerInfo) {
-      playerName = sanitizePlayerName(playerInfo.name);
-      playerColor = sanitizePlayerColor(playerInfo.playerColor);
+function tintOpponent(model, colorName) {
+  const hex = CAR_TINT[colorName] || CAR_TINT.red;
+  const color = new THREE.Color(hex);
+  model.traverse((node) => {
+    if (node.isMesh) {
+      const name = (node.name || '').toLowerCase();
+      const isWheel = name.includes('wheel') || name.includes('tire') || name.includes('tyre');
+      node.material = node.material.clone();
+      node.material.transparent = true;
+      node.material.opacity = 0.6;
+      node.material.depthWrite = false;
+      node.castShadow = false;
+      if (!isWheel && node.material.color) node.material.color.copy(color);
     }
-  }
-  
-  // Load the appropriate colored car model (color is whitelisted, so the
-  // URL below can't be manipulated via path traversal)
-  loader.load(
-    `/models/car_${playerColor}.glb`,
-    (gltf) => {
-      const opponentModel = gltf.scene.clone();
-      
-      // Adjust model scale and position
-      opponentModel.scale.set(4, 4, 4);
-      opponentModel.position.set(0, 2, 0);
-      
-      // Make car semi-transparent
-      opponentModel.traverse((node) => {
+  });
+}
+
+function loadOpponentCarModel(playerId, scene) {
+  const loader = createGLTFLoader(window.loadingManager);
+  // Name/color come from the trusted roster, NOT per-packet fields (#11)
+  const info = trustedPlayer(playerId) || {};
+  const playerName = sanitizePlayerName(info.name);
+  const playerColor = sanitizePlayerColor(info.playerColor);
+
+  const finalize = (gltf, useTint) => {
+    const model = gltf.scene.clone();
+    model.scale.set(4, 4, 4);
+    model.position.set(0, 2, 0);
+    if (useTint) {
+      tintOpponent(model, playerColor);
+    } else {
+      model.traverse((node) => {
         if (node.isMesh) {
           node.material = node.material.clone();
           node.material.transparent = true;
-          node.material.opacity = 0.5;
+          node.material.opacity = 0.6;
           node.material.depthWrite = false;
           node.castShadow = false;
         }
       });
-      
-      // Create text sprite for player name
-      const nameSprite = createTextSprite(playerName);
-      nameSprite.position.y = 0.3; 
-      nameSprite.scale.set(1, 0.25, 1);
-      opponentModel.add(nameSprite); 
-      
-      
-      // Make invisible initially
-      opponentModel.visible = false;
-      
-      // Add to scene
-      scene.add(opponentModel);
-      
-      // Store in opponent cars collection
-      state.opponentCars[playerId] = {
-        model: opponentModel,
-        nameLabel: nameSprite,
-        name: playerName,
-        color: playerColor,
-        lastUpdate: Date.now()
-      };
-    },
+    }
+    // The model is scaled 4x, so child transforms are multiplied by 4: use
+    // fractional local values for a sensible world-space label size (#1).
+    const nameSprite = createNameSprite(playerName, playerColor);
+    nameSprite.position.y = 0.55;
+    nameSprite.scale.set(1.6, 0.4, 1);
+    model.add(nameSprite);
+    model.visible = false;
+    scene.add(model);
+
+    state.opponentCars[playerId] = {
+      model,
+      nameLabel: nameSprite,
+      name: playerName,
+      color: playerColor,
+      lastUpdate: Date.now(),
+      buffer: new SnapshotBuffer(), // interpolation buffer (#1)
+      _pos: new THREE.Vector3(),
+      _quat: new THREE.Quaternion(),
+      raceProgress: { currentGateIndex: 0, distanceToNextGate: 1e6 },
+      dnf: false,
+    };
+  };
+
+  // Try the single base model + tint first (#22), then fall back to colored GLB.
+  loader.load('/models/car.glb',
+    (gltf) => finalize(gltf, true),
     undefined,
-    (error) => {
-      console.error(`Error loading ${playerColor} opponent car model:`, error);
-      // Fallback to red model if the requested color fails to load
-      if (playerColor !== 'red') {
-        console.log('Falling back to red opponent car model');
-        loader.load(
-          '/models/car_red.glb',
-          (gltf) => {
-            // Same handling as above, but with red model
-            const opponentModel = gltf.scene.clone();
-            opponentModel.scale.set(4, 4, 4);
-            opponentModel.position.set(0, 2, 0);
-            
-            opponentModel.traverse((node) => {
-              if (node.isMesh) {
-                node.material = node.material.clone();
-                node.material.transparent = true;
-                node.material.opacity = 0.5;
-                node.material.depthWrite = false;
-                node.castShadow = false;
-              }
-            });
-            
-            const nameSprite = createTextSprite(playerName);
-            nameSprite.position.y = 0.3;
-            nameSprite.scale.set(1, 0.25, 1);
-            opponentModel.add(nameSprite);
-            
-            opponentModel.visible = false;
-            scene.add(opponentModel);
-            
-            state.opponentCars[playerId] = {
-              model: opponentModel,
-              nameLabel: nameSprite,
-              name: playerName,
-              color: 'red',
-              lastUpdate: Date.now()
-            };
-          },
-          undefined,
-          (err) => console.error('Error loading fallback car model:', err)
-        );
-      }
+    () => {
+      loader.load(`/models/car_${playerColor}.glb`,
+        (gltf) => finalize(gltf, false),
+        undefined,
+        () => loader.load('/models/car_red.glb', (gltf) => finalize(gltf, false), undefined,
+          (err) => error('Error loading opponent car model:', err))
+      );
     }
   );
 }
 
-// Function to create a text sprite
-function createTextSprite(text) {
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  canvas.width = 256;
-  canvas.height = 64;
-  
-  // Clear canvas
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  
-  // Text style
-  context.font = 'bold 32px Poppins';
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  
-  // Draw text outline
-  context.strokeStyle = 'black';
-  context.lineWidth = 4;
-  context.strokeText(text, canvas.width / 2, canvas.height / 2);
-  
-  // Draw text fill
-  context.fillStyle = 'white';
-  context.fillText(text, canvas.width / 2, canvas.height / 2);
-  
-  // Create texture from canvas
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  
-  // Create sprite material
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true
-  });
-  
-  // Create sprite
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(6, 1.5, 1); // Adjust size as needed
-  
-  return sprite;
-}
+// Push a decoded transform into the opponent's snapshot buffer (#1). We no
+// longer write straight to model.position - the render loop samples the buffer.
+function handleTransform(playerId, data) {
+  const opponent = state.opponentCars[playerId];
+  if (!opponent || !opponent.model || !data) return;
+  if (opponent.dnf) return;
 
-// Update a specific opponent's car position
-// Everything in `data` comes from a remote peer and must be treated as
-// untrusted: validated for type/range and sanitized before use.
-export function updateOpponentCarPosition(playerId, data) {
-  // Just look up by the original ID
-  let opponent = state.opponentCars[playerId];
-  
-  if (!opponent || !opponent.model) {
-    console.log(`No opponent model found for ID: ${playerId}`);
-    return;
-  }
-  
-  if (!data || typeof data !== 'object') return;
-
-  // Update last seen timestamp
   opponent.lastUpdate = Date.now();
-  
-  // Make visible
-  opponent.model.visible = true;
-  
-  const position = typeof data.position === 'object' && data.position !== null ? data.position : {};
-  const quaternion = typeof data.quaternion === 'object' && data.quaternion !== null ? data.quaternion : {};
-  
-  // Update position and rotation, falling back to safe defaults when a
-  // peer sends NaN/strings/huge values that would corrupt Three.js state
-  opponent.model.position.set(
-    isFiniteNumber(position.x) ? position.x : 0, 
-    isFiniteNumber(position.y) ? position.y : 0, 
-    isFiniteNumber(position.z) ? position.z : 0
-  );
-  
-  opponent.model.quaternion.set(
-    isFiniteNumber(quaternion.x) ? quaternion.x : 0,
-    isFiniteNumber(quaternion.y) ? quaternion.y : 0,
-    isFiniteNumber(quaternion.z) ? quaternion.z : 0,
-    isFiniteNumber(quaternion.w) ? quaternion.w : 1
-  );
-  
-  // Store race progress data with detailed logging
-  if (data.raceProgress && typeof data.raceProgress === 'object') {
-    // Create a fresh race progress object with explicit property assignments
-    if (!opponent.raceProgress) {
-      opponent.raceProgress = {};
-    }
+  state.lastPingFrom[playerId] = Date.now();
 
-    const gateIndex = Number(data.raceProgress.currentGateIndex);
-    opponent.raceProgress.currentGateIndex =
-      Number.isFinite(gateIndex) && gateIndex >= 0 ? Math.floor(gateIndex) : 0;
+  const position = (typeof data.position === 'object' && data.position) ? data.position : {};
+  const quaternion = (typeof data.quaternion === 'object' && data.quaternion) ? data.quaternion : {};
 
-    const distanceToNextGate = Number(data.raceProgress.distanceToNextGate);
-    opponent.raceProgress.distanceToNextGate =
-      Number.isFinite(distanceToNextGate) && distanceToNextGate >= 0
-        ? Math.min(distanceToNextGate, 1e6)
-        : 1000000;
-    
-    if (data.playerName) {
-      opponent.name = sanitizePlayerName(data.playerName);
-    }
-    if (data.playerColor) {
-      opponent.color = sanitizePlayerColor(data.playerColor);
-    }
-  }
-  
-  // Check if this player has just finished the race
-  if (data.finishTime && window.playerFinishTimes) {
-    // Only accept well-formed MM:SS times from peers
-    const finishTime = sanitizeFinishTime(data.finishTime);
-    if (!finishTime) return;
+  const safePos = {
+    x: isFiniteNumber(position.x) ? position.x : 0,
+    y: isFiniteNumber(position.y) ? position.y : 0,
+    z: isFiniteNumber(position.z) ? position.z : 0,
+  };
+  const safeQuat = {
+    x: isFiniteNumber(quaternion.x) ? quaternion.x : 0,
+    y: isFiniteNumber(quaternion.y) ? quaternion.y : 0,
+    z: isFiniteNumber(quaternion.z) ? quaternion.z : 0,
+    w: isFiniteNumber(quaternion.w) ? quaternion.w : 1,
+  };
 
-    console.log(`Received finish time for ${opponent.name || playerId}: ${finishTime}`);
-    
-    // Store the finish time in our permanent tracker
-    window.playerFinishTimes[playerId] = finishTime;
-    
-    // Also update this opponent as having finished the race
-    opponent.raceFinished = true;
-    
-    // Mark the last gate as passed for this opponent
-    if (opponent.raceProgress) {
-      if (window.gateData && window.gateData.totalGates) {
-        opponent.raceProgress.currentGateIndex = window.gateData.totalGates;
-      }
-    }
-    
-    // Force the leaderboard to update
-    setTimeout(() => {
-      if (window.updateLeaderboard) {
-        window.updateLeaderboard();
-      }
-    }, 100);
-  }
+  opponent.buffer.add({ position: safePos, quaternion: safeQuat, t: Date.now() });
+
+  // Race progress for the leaderboard.
+  const gi = Number(data.gateIndex);
+  opponent.raceProgress.currentGateIndex = Number.isFinite(gi) && gi >= 0 ? Math.floor(gi) : opponent.raceProgress.currentGateIndex;
+  const dn = Number(data.distanceToNextGate);
+  opponent.raceProgress.distanceToNextGate = Number.isFinite(dn) && dn >= 0 ? Math.min(dn, 1e6) : opponent.raceProgress.distanceToNextGate;
 }
 
-// Update the markers (player name labels)
-export function updateMarkers() {
-  // Loop through all opponent cars and ensure name labels are visible
-  Object.values(state.opponentCars).forEach(opponent => {
-    if (opponent.model && opponent.model.visible && opponent.nameLabel) {
-      // Make name label visible
-      opponent.nameLabel.visible = true;
-      
-      // Make sure the text always faces the camera (this happens automatically with sprites)
+// Called every render frame to advance interpolation (#1).
+export function updateOpponentInterpolation(now = Date.now()) {
+  Object.values(state.opponentCars).forEach((opp) => {
+    if (!opp.model || opp.dnf) return;
+    if (opp.buffer.sample(opp._pos, opp._quat, now, INTERP_DELAY_MS)) {
+      opp.model.visible = true;
+      opp.model.position.copy(opp._pos);
+      opp.model.quaternion.copy(opp._quat);
     }
   });
 }
 
-// Modify the sendCarData function
+export function updateMarkers() {
+  Object.values(state.opponentCars).forEach((opponent) => {
+    if (opponent.model && opponent.model.visible && opponent.nameLabel) {
+      opponent.nameLabel.visible = true;
+    }
+  });
+}
+
+// Called by the game loop when the host locks in the absolute race start time.
+export function setRaceStartAt(ts) {
+  state.raceStartAt = ts;
+}
+
+// Send local car data. Now sends a compact binary transform (#2) at ~18 Hz.
 export function sendCarData(gameState) {
   if (!gameState.carModel || !state.peer) return;
-  
-  // Get the current player ID
   const myPlayerId = localStorage.getItem('myPlayerId');
-  
-  // Get player name and color from game config (already sanitized at load,
-  // but re-sanitize defensively before use)
-  let playerName = 'Player';
-  let playerColor = 'red';
-  
-  if (state.gameConfig && state.gameConfig.players) {
-    const playerInfo = state.gameConfig.players.find(p => p.id === myPlayerId);
-    if (playerInfo) {
-      playerName = sanitizePlayerName(playerInfo.name);
-      playerColor = sanitizePlayerColor(playerInfo.playerColor);
-    }
-  }
-  
-  // Get gate progress information from global window state
-  const gateData = window.gateData;
+
+  const gateData = getGateData();
   const currentGateIndex = gateData ? gateData.currentGateIndex : 0;
-  
-  // Calculate distance to next gate if possible - with safety checks
-  let distanceToNextGate = 1000000; // Use a large but safe value instead of Number.MAX_VALUE
-  
+
+  let distanceToNextGate = 1e6;
   try {
     if (gateData && gateData.gates && gateData.gates.length > currentGateIndex && gameState.carModel) {
       const nextGate = gateData.gates[currentGateIndex];
       if (nextGate) {
         const gatePos = new THREE.Vector3();
         nextGate.getWorldPosition(gatePos);
-        
-        // Check for valid position values
-        if (isFinite(gatePos.x) && isFinite(gatePos.y) && isFinite(gatePos.z) &&
-            isFinite(gameState.carModel.position.x) && 
-            isFinite(gameState.carModel.position.y) && 
-            isFinite(gameState.carModel.position.z)) {
-            
-          const dx = gameState.carModel.position.x - gatePos.x;
-          const dy = gameState.carModel.position.y - gatePos.y;
-          const dz = gameState.carModel.position.z - gatePos.z;
-          
-          // Calculate distance and round to avoid precision issues
-          const calculatedDistance = Math.round((dx * dx + dy * dy + dz * dz) * 100) / 100;
-          
-          if (isFinite(calculatedDistance) && !isNaN(calculatedDistance)) {
-            distanceToNextGate = Math.min(calculatedDistance, 1000000);
-          }
-        }
+        const dx = gameState.carModel.position.x - gatePos.x;
+        const dy = gameState.carModel.position.y - gatePos.y;
+        const dz = gameState.carModel.position.z - gatePos.z;
+        const d = dx * dx + dy * dy + dz * dz;
+        if (isFinite(d)) distanceToNextGate = Math.min(d, 1e6);
       }
     }
-  } catch (err) {
-    console.error('Error calculating distance to gate:', err);
-  }
-  
-  // Ensure all position and quaternion values are valid numbers
-  const safePosition = {
-    x: isFinite(gameState.carModel.position.x) ? Number(gameState.carModel.position.x.toFixed(2)) : 0,
-    y: isFinite(gameState.carModel.position.y) ? Number(gameState.carModel.position.y.toFixed(2)) : 0,
-    z: isFinite(gameState.carModel.position.z) ? Number(gameState.carModel.position.z.toFixed(2)) : 0
-  };
-  
-  const safeQuaternion = {
-    x: isFinite(gameState.carModel.quaternion.x) ? Number(gameState.carModel.quaternion.x.toFixed(4)) : 0,
-    y: isFinite(gameState.carModel.quaternion.y) ? Number(gameState.carModel.quaternion.y.toFixed(4)) : 0,
-    z: isFinite(gameState.carModel.quaternion.z) ? Number(gameState.carModel.quaternion.z.toFixed(4)) : 0,
-    w: isFinite(gameState.carModel.quaternion.w) ? Number(gameState.carModel.quaternion.w.toFixed(4)) : 1
-  };
-  
-  // Prepare the data packet with safe values
-  const carData = {
-    type: 'carUpdate',
-    playerId: state.peer.id,
-    playerName: playerName,
-    playerColor: playerColor,
-    position: safePosition,
-    quaternion: safeQuaternion,
-    raceProgress: {
-      currentGateIndex: currentGateIndex,
-      distanceToNextGate: distanceToNextGate
-    }
-  };
-  
-  // Include finish time if the player has finished the race
-  if (window.raceState.raceFinished && window.playerFinishTimes) {
-    // Get the finish time from our permanent store
-    const myFinishTime = window.playerFinishTimes[myPlayerId];
-    if (myFinishTime) {
-      carData.finishTime = myFinishTime;
-      console.log("Sending finish time in car data:", myFinishTime);
-    }
-  }
-  
-  // Handle differently based on if we're host or client
+  } catch (err) { /* ignore */ }
+
+  const pos = gameState.carModel.position;
+  const quat = gameState.carModel.quaternion;
+  const transformBuf = encodeTransform({
+    position: pos,
+    quaternion: quat,
+    gateIndex: currentGateIndex,
+    distanceToNextGate,
+    finished: !!window.raceState.raceFinished,
+  });
+
   if (state.isHost) {
-    // Store host's own car data for broadcasting
-    state.allCarsData[myPlayerId] = carData;
-    
-    // Broadcast all car data at a reasonable interval (50ms = 20 updates/sec)
-    if (!state.lastBroadcastTime || Date.now() - state.lastBroadcastTime >= 50) {
+    // Store host's own decoded transform for rebroadcast.
+    state.allCarsData[myPlayerId] = {
+      position: { x: pos.x, y: pos.y, z: pos.z },
+      quaternion: { x: quat.x, y: quat.y, z: quat.z, w: quat.w },
+      gateIndex: currentGateIndex,
+      distanceToNextGate,
+    };
+    // Host derives its own finish from gate progression too (#3).
+    recordHostProgress(myPlayerId, { raceProgress: { currentGateIndex } });
+
+    if (Date.now() - state.lastBroadcastTime >= BROADCAST_INTERVAL) {
       broadcastAllCarsData();
     }
   } else {
-    // For clients, just send their own car data to the host
-    state.playerConnections.forEach(conn => {
-      try {
-        // Check if connection is open before sending
+    // Guests send compact binary to host at ~18 Hz.
+    if (Date.now() - state.lastBroadcastTime >= BROADCAST_INTERVAL) {
+      state.lastBroadcastTime = Date.now();
+      state.playerConnections.forEach((conn) => {
         if (conn && conn.open) {
-          conn.send(carData);
+          try { conn.send(transformBuf); } catch (err) { error('Error sending car data:', err); }
         }
-      } catch (err) {
-        console.error('Error sending car data:', err);
-      }
-    });
+      });
+    }
   }
 }
 
 export function checkAllPlayersConnected() {
   if (!state.gameConfig || !state.gameConfig.players) return false;
-  
   const myPlayerId = localStorage.getItem('myPlayerId');
-  let connectedCount = 1; // Count myself
-  
-  // Count all established connections
+  let connectedCount = 1;
   for (const player of state.gameConfig.players) {
-    if (player.id === myPlayerId) continue; // Skip myself
-    
-    // Check if this player is connected
-    if (state.playerConnections.some(conn => conn.peer === player.id)) {
-      connectedCount++;
-    }
+    if (player.id === myPlayerId) continue;
+    if (state.playerConnections.some((conn) => conn.peer === player.id)) connectedCount++;
   }
-  
   return connectedCount === state.gameConfig.players.length;
 }
 
 export function broadcastRaceStart() {
-  state.playerConnections.forEach(conn => {
-    try {
-      if (conn && conn.open) {
-        conn.send({
-          type: 'raceStart',
-          timestamp: Date.now()
-        });
-      }
-    } catch (err) {
-      console.error('Error sending race start event:', err);
+  state.playerConnections.forEach((conn) => {
+    if (conn && conn.open) {
+      try { conn.send({ type: 'raceStart', timestamp: Date.now() }); } catch (err) { error(err); }
     }
   });
 }
 
-// Completely revise the broadcast functions for better reliability
-export function broadcastCountdownStart() {
-  
+// Absolute-timestamp countdown (#4): broadcast a start instant everyone counts
+// down to, instead of a fire-and-forget signal that spreads by latency.
+export function broadcastCountdownStart(startAt) {
   if (state.playerConnections.length === 0) {
-    console.error('No player connections available for broadcasting!');
+    warn('No connections to broadcast countdown to');
     return;
   }
-  
-  let successCount = 0;
-  state.playerConnections.forEach((conn, index) => {
-    try {
-      if (conn && conn.open) {
-        const message = {
-          type: 'countdownStart',
-          timestamp: Date.now()
-        };
-        conn.send(message);
-        successCount++;
-      } else {
-        console.error(`Connection ${index} is not open! State:`, conn ? conn.open : 'null');
-      }
-    } catch (err) {
-      console.error(`Error sending countdown to player ${index}:`, err);
+  state.playerConnections.forEach((conn) => {
+    if (conn && conn.open) {
+      try { conn.send({ type: 'countdownStart', startAt }); } catch (err) { error(err); }
     }
   });
-  
 }
 
 function broadcastAllCarsData() {
   if (!state.isHost || state.playerConnections.length === 0) return;
-  
-  // Create the broadcast packet
   const broadcastPacket = {
     type: 'carUpdateAll',
     timestamp: Date.now(),
-    cars: state.allCarsData
+    cars: state.allCarsData,
   };
-  
-  // Send to all connected players
-  state.playerConnections.forEach(conn => {
-    try {
-      if (conn && conn.open) {
-        conn.send(broadcastPacket);
-      }
-    } catch (err) {
-      console.error('Error broadcasting all cars data:', err);
+  state.playerConnections.forEach((conn) => {
+    if (conn && conn.open) {
+      try { conn.send(broadcastPacket); } catch (err) { error('Error broadcasting cars:', err); }
     }
   });
-  
-  // Update the last broadcast time
   state.lastBroadcastTime = Date.now();
 }

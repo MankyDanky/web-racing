@@ -55,6 +55,44 @@ A real-time multiplayer 3D racing game built with JavaScript and modern web tech
 - **Joystick Down**: Brake/Reverse
 - **Joystick Left/Right**: Turn
 
+## Running It Yourself
+
+### One command (recommended)
+
+Run the **entire game** — the site *and* the multiplayer party-code API — from a
+single process with one command:
+
+```bash
+python3 run.py
+```
+
+Then open <http://localhost:8000>. It builds the frontend, sets up the backend,
+and serves everything on one port. Multiplayer works out of the box (signalling
+uses the public PeerJS cloud). No second terminal, no separate broker.
+
+> Requirements: Node.js 20+ and Python 3.11+. See `python3 run.py --help` for
+> flags (`--build`, `--port`, `--skip-venv`, …).
+
+### Deploy it (free)
+
+- **[RENDER_SETUP.md](RENDER_SETUP.md)** — deploy to Render's **free tier** in a
+  few clicks, A→Z. One service, one port (`render.yaml` + `render-build.sh`
+  included).
+
+### More docs
+
+- **[RUNNING.md](RUNNING.md)** — the classic two-terminal dev setup (Vite dev
+  server + Django), plus all the npm/manage.py commands.
+- **[LAN_MULTIPLAYER.md](LAN_MULTIPLAYER.md)** — play multiplayer with friends on
+  the same Wi-Fi/router, admin login, and troubleshooting.
+- **[DEPLOY.md](DEPLOY.md)** — production environment variables and deployment.
+
+Quick start (single-player only, frontend dev server, no backend):
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
 ## 🧰 Technologies Used
 
 - **Three.js**: 3D rendering engine

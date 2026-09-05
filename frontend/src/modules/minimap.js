@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createGLTFLoader } from './loaders.js';
+import { log, error } from './debug.js';
+import { getAssetMap } from './tracks.js';
 
 // Store minimap state
 const minimap = {
@@ -10,7 +12,8 @@ const minimap = {
   scale: 1,
   offsetX: 0,
   offsetY: 0,
-  mapId: 'map1' // Default map ID
+  mapId: 'map1', // Default map ID
+  lastDraw: 0,   // last time players were drawn (for 10 Hz throttle #27)
 };
 
 // Create the minimap canvas
@@ -46,33 +49,33 @@ export function createMinimap(mapId) {
   // Load the track curve for minimap
   loadTrackCurve(minimap.mapId);
   
-  console.log(`Minimap created for map: ${minimap.mapId}`);
+  log(`Minimap created for map: ${minimap.mapId}`);
   return minimap;
 }
 
 // Load the Bezier curve model for the track
 function loadTrackCurve(mapId) {
-  const loader = new GLTFLoader();
+  const loader = createGLTFLoader(window.loadingManager);
   
-  // Use the specified map's track outline
-  const trackOutlinePath = `/models/maps/${mapId}/track-outline.glb`;
-  console.log(`Loading track outline from: ${trackOutlinePath}`);
+  // Use the specified map's track outline (reverse variants share assets #43)
+  const trackOutlinePath = `/models/maps/${getAssetMap(mapId)}/track-outline.glb`;
+  log(`Loading track outline from: ${trackOutlinePath}`);
   
   // Load the model containing the Bezier curve
   loader.load(
     trackOutlinePath,
     (gltf) => {
       const curveModel = gltf.scene;
-      console.log(`Track curve model loaded for minimap (${mapId})`);
+      log(`Track curve model loaded for minimap (${mapId})`);
       extractCurvePoints(curveModel);
     },
     (xhr) => {
-      console.log(`Loading track curve: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
+      log(`Loading track curve: ${(xhr.loaded / xhr.total * 100).toFixed(1)}%`);
     },
     (error) => {
-      console.error(`Error loading track curve for ${mapId}:`, error);
+      error(`Error loading track curve for ${mapId}:`, error);
       // Fallback to the regular track model if curve can't be loaded
-      console.log('Will use regular track model as fallback');
+      log('Will use regular track model as fallback');
     }
   );
 }
@@ -81,7 +84,7 @@ function loadTrackCurve(mapId) {
 export function updateMinimapTrack(mapId) {
   if (mapId && mapId !== minimap.mapId) {
     minimap.mapId = mapId;
-    console.log(`Updating minimap for new map: ${mapId}`);
+    log(`Updating minimap for new map: ${mapId}`);
     
     // Clear existing track data
     minimap.trackData = null;
@@ -94,11 +97,11 @@ export function updateMinimapTrack(mapId) {
 // Extract points from the Bezier curve model
 function extractCurvePoints(curveModel) {
   if (!curveModel) {
-    console.error('Curve model not available');
+    error('Curve model not available');
     return;
   }
   
-  console.log('Extracting curve points for minimap...');
+  log('Extracting curve points for minimap...');
   
   // Array to store curve points
   const curvePoints = [];
@@ -125,11 +128,11 @@ function extractCurvePoints(curveModel) {
   });
   
   if (curvePoints.length === 0) {
-    console.error('No curve points found in the model');
+    error('No curve points found in the model');
     return;
   }
   
-  console.log(`Extracted ${curvePoints.length} curve points for minimap`);
+  log(`Extracted ${curvePoints.length} curve points for minimap`);
   
   // Process the curve points for the minimap
   processCurvePoints(curvePoints);
@@ -165,7 +168,7 @@ function processCurvePoints(curvePoints) {
   // Store track data
   minimap.trackData = curvePoints;
   
-  console.log('Track curve data processed', {
+  log('Track curve data processed', {
     bounds: { minX, maxX, minZ, maxZ },
     scale: minimap.scale,
     offset: { x: minimap.offsetX, y: minimap.offsetY }
@@ -236,7 +239,7 @@ function drawTrack() {
 
 // Keep the original extractTrackData function as a fallback
 export function extractTrackData(trackModel) {
-  console.log(`Using dedicated track curve for minimap (${minimap.mapId}). Regular track model not needed.`);
+  log(`Using dedicated track curve for minimap (${minimap.mapId}). Regular track model not needed.`);
   
   // If we already have track data, we don't need to extract it again
   if (minimap.trackData) {
@@ -245,7 +248,7 @@ export function extractTrackData(trackModel) {
   
   // If the curve model failed to load, fall back to extracting from the track model
   if (trackModel) {
-    console.log("Falling back to track model for minimap extraction");
+    log("Falling back to track model for minimap extraction");
     // Existing extraction code...
     const trackPoints = [];
     
@@ -273,10 +276,16 @@ export function extractTrackData(trackModel) {
   }
 }
 
-// Update player positions on the minimap
+// Update player positions on the minimap.
+// Throttled to ~10 Hz (#27): the minimap is UI, not gameplay, so redrawing it
+// every render frame wasted CPU/canvas work.
 export function updateMinimapPlayers(localPlayer, opponents) {
   if (!minimap.ctx || !minimap.trackData) return;
-  
+
+  const now = Date.now();
+  if (now - minimap.lastDraw < 100) return; // 10 Hz cap
+  minimap.lastDraw = now;
+
   // Redraw the track first
   drawTrack();
   

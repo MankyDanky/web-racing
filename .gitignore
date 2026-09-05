@@ -31,3 +31,9 @@ __pycache__/
 backend/venv/
 backend/db.sqlite3
 backend/staticfiles/
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python venv
+backend/.venv/
